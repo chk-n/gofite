@@ -73,7 +73,7 @@ func generateSelect(p *ast.Prod, s *ast.Scope) (*ast.SelectStmt, error) {
 	stmt.WhereClause = generateBoolExpression(stmt.Prod)
 
 	if d6() > 2 {
-		stmt.LimitClause = fmt.Sprintf("LIMIT %d", d100())
+		stmt.LimitClause = fmt.Sprintf("LIMIT %d", d100()+d100())
 	}
 
 	return stmt, nil
