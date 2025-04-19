@@ -75,7 +75,7 @@ func (t *Table) Columns() []Column {
 }
 
 func (t *Table) Ident() string {
-	return t.Schema + "." + t.Name
+	return t.Name
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L37
