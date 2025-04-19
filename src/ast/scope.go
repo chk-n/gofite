@@ -8,8 +8,9 @@ import "github.com/cnordg/ast-group-project/src/schema"
 type Scope struct {
 	parent *Scope
 	// available Tables or aliased reliation that
-	// can be used to populate FROM clause during
-	// generation
+	// can be used to reference in FROM clause.
+	// This is different from Refs that can be used
+	// within SELECT and WHERE clauses
 	Tables []schema.NamedRelation
 	// available tables, columns, new tables
 	// introduced during generation, subqueries
@@ -22,6 +23,19 @@ type Scope struct {
 	// tracks unique identifiers to avoid reusing
 	// idents which would cause syntax errors
 	StmtSeq map[string]uint
+}
+
+// AvailableTypes may return duplicate types.
+func (s *Scope) AvailableTypes() []schema.SqlType {
+	var types []schema.SqlType
+
+	for _, r := range s.Refs {
+		for _, c := range r.Columns {
+			types = append(types, c.Type())
+		}
+	}
+
+	return types
 }
 
 func (s *Scope) RefsOfType(t schema.SqlType) []schema.RelationColumn {

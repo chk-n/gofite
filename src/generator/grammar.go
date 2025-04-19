@@ -107,10 +107,11 @@ func generateSelectClause(p *ast.Prod) *ast.SelectClause {
 	// add at least one column
 	{
 	start:
-		expr := generateValueExpression(p, "")
+		typ := randomPick(p.Scope.AvailableTypes())
+		expr := generateValueExpression(p, typ)
 		col := schema.Column{
 			Name: fmt.Sprintf("c%d", p.Scope.StmtSeq["c"]),
-			Typ:  expr.Type(),
+			Typ:  typ,
 		}
 		p.Scope.StmtSeq["c"]++
 
@@ -268,13 +269,15 @@ func generateBoolExpression(p *ast.Prod) *ast.BoolExpr {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L42
 func generateComparisonOperation(p *ast.Prod) *ast.BoolExpr {
-	left := generateValueExpression(p, "")
+	typ := randomPick(p.Scope.AvailableTypes())
+	left := generateValueExpression(p, typ)
 
+	// TODO: some of these operators do not make sense for all types
 	operators := []string{"=", "<>", "<", ">", "<=", ">="}
 	op := randomPick(operators)
 
 	// make sure rhs matches the lhs type
-	right := generateValueExpression(p, left.Type())
+	right := generateValueExpression(p, typ)
 
 	return &ast.BoolExpr{
 		Left:  left,
