@@ -56,18 +56,20 @@ func generateStatement(s *ast.Scope) (ast.Production, error) {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L314
 func generateSelect(p *ast.Prod, s *ast.Scope) (*ast.SelectStmt, error) {
-	stmt := ast.NewSelectStmt(p, s, false)
+	stmt := ast.NewSelectStmt(p, s, true)
 
 	if d100() == 1 {
 		stmt.SetQuantifier = "distinct"
 	}
 
-	stmt.SelectList = generateSelectClause(stmt.Prod)
 	var err error
 	stmt.FromClause, err = generateFromClause(stmt.Prod)
 	if err != nil {
 		return nil, err
 	}
+	// needs to be run after fromClause to ensure `Refs`
+	// are available
+	stmt.SelectList = generateSelectClause(stmt.Prod)
 	stmt.WhereClause = generateBoolExpression(stmt.Prod)
 
 	if d6() > 2 {
