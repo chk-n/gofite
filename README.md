@@ -14,11 +14,16 @@ crashes.
 
 ## Organisation
 
-`/cmd`: contains cli
-`/src`: contains all source code related to query generation and fuzzing
-`/project`: contains project description
+* `/cmd`: contains cli
+* `/src`: contains all source code related to query generation and fuzzing
+* `/project`: contains project description
 
-## Run fuzzer
+## Dependencies
+
+Only for testing:
+* `go-sqlite3` - https://github.com/mattn/go-sqlite3
+
+## Run cli fuzzer
 
 ```go
 // todo
