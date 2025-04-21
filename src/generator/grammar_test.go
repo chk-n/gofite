@@ -49,32 +49,93 @@ func TestSelectGeneration(t *testing.T) {
 			}
 		}
 
-		// NOTE: the fact we need to convert here is an issue
-		// with how we define structs without abstractions atm
-		named := []schema.NamedRelation{}
-		for _, table := range sch.Tables {
-			named = append(named, schema.NamedRelation{Name: table.Name, Columns: table.Cols})
-		}
-
 		// generate and execute each query
 		nQueries := 1_000
 		for i := range nQueries {
 			s := &ast.Scope{
-				Tables:  named,
+				Tables:  sch.Tables,
 				Schema:  sch,
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
 
-			slct, err := generateStatement(s)
-			if err != nil {
-				t.Errorf("Failed to generate statement for query %d: %v", i+1, err)
-				continue
-			}
+			slct := generateStatement(s)
 
 			selectSQL := slct.Out()
 			if _, err := conn.QueryContext(ctx, selectSQL); err != nil {
 				t.Errorf("Failed to execute query %d: %v\nSchema: %s\nSQL: %s", i+1, err, schemaSQL, selectSQL)
+			}
+		}
+
+		cancel()
+		conn.Close()
+		db.Close()
+	}
+}
+
+// TestInsertGeneration generates a random schema and 1k insert statements
+// 5k times to ensure we generate syntactically and semantically valid inserts
+func TestInsertGeneration(t *testing.T) {
+	nIter := 5_000
+	for range nIter {
+		db, err := sql.Open("sqlite3", ":memory:")
+		if err != nil {
+			t.Fatalf("Failed to open database: %v", err)
+		}
+
+		// each new connection creates a new in-memory db
+		ctx, cancel := context.WithCancel(context.Background())
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get db connection: %v", err)
+		}
+
+		// create schema
+		sch := generateTable(1)
+		schemaSQL := sch.Out()
+		for stmt := range strings.SplitSeq(schemaSQL, ";") {
+			if stmt = strings.TrimSpace(stmt); stmt == "" {
+				continue
+			}
+			_, err = conn.ExecContext(ctx, stmt)
+			if err != nil {
+				t.Fatalf("Failed to execute schema creation: %v\nSQL: %s", err, stmt)
+			}
+		}
+
+		// generate inserts
+		nInserts := 1_000
+		for j := range nInserts {
+			s := &ast.Scope{
+				Tables:  sch.Tables,
+				Schema:  sch,
+				Refs:    []schema.NamedRelation{},
+				StmtSeq: make(map[string]uint),
+			}
+
+			p := &ast.Prod{
+				Scope: s,
+			}
+
+			insertStmt := generateInsert(p, s)
+			insertSQL := insertStmt.Out()
+
+			_, err := conn.ExecContext(ctx, insertSQL)
+			if err != nil {
+				t.Errorf("Failed to execute insert %d: %v\nSchema: %s\nSQL: %s", j+1, err, schemaSQL, insertSQL)
+			}
+		}
+
+		// verify data inserted
+		for _, table := range sch.Tables {
+			var count int
+			err := conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table.Name()).Scan(&count)
+			if err != nil {
+				t.Errorf("Failed to count rows in table %s: %v", table.Name(), err)
+			}
+
+			if count != nInserts {
+				t.Errorf("Expected %d rows in table %s, but found %d", nInserts, table.Name(), count)
 			}
 		}
 

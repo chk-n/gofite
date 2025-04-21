@@ -11,9 +11,10 @@ type Relation interface {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L51
-type NamedRelation struct {
-	Name    string
-	Columns []Column
+type NamedRelation interface {
+	Out() string
+	Name() string
+	Columns() []Column
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L20
@@ -21,8 +22,8 @@ type SqlType string
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/schema.hh#L16
 type Schema struct {
-	Tables    []Table
-	Operators []Operator
+	Tables    []NamedRelation
+	Operators []*Operator
 	// routines []routine
 	// aggregates []routine
 }
@@ -45,21 +46,27 @@ func (s *Schema) Out() string {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L65
 type Table struct {
-	Schema string
-	Name   string
-	Cols   []Column
+	name string
+	cols []Column
 	// TODO: add constraints
+}
+
+func NewTable(n string, cols []Column) *Table {
+	return &Table{
+		name: n,
+		cols: cols,
+	}
 }
 
 func (t *Table) Out() string {
 	var buf strings.Builder
 
-	buf.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", t.Ident()))
+	buf.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", t.Name()))
 
-	for i, col := range t.Cols {
+	for i, col := range t.cols {
 		buf.WriteString("    ")
 		buf.WriteString(col.Out())
-		if i < len(t.Cols)-1 {
+		if i < len(t.cols)-1 {
 			buf.WriteString(",")
 		}
 		buf.WriteString("\n")
@@ -71,11 +78,11 @@ func (t *Table) Out() string {
 }
 
 func (t *Table) Columns() []Column {
-	return t.Cols
+	return t.cols
 }
 
-func (t *Table) Ident() string {
-	return t.Name
+func (t *Table) Name() string {
+	return t.name
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L37

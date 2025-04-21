@@ -25,12 +25,27 @@ type Scope struct {
 	StmtSeq map[string]uint
 }
 
+func NewScope(parent *Scope) *Scope {
+	if parent != nil {
+		return &Scope{
+			parent:  parent,
+			Schema:  parent.Schema,
+			Tables:  parent.Tables,
+			Refs:    parent.Refs,
+			StmtSeq: parent.StmtSeq,
+		}
+	}
+	return &Scope{
+		StmtSeq: make(map[string]uint),
+	}
+}
+
 // AvailableTypes may return duplicate types.
 func (s *Scope) AvailableTypes() []schema.SqlType {
 	var types []schema.SqlType
 
 	for _, r := range s.Refs {
-		for _, c := range r.Columns {
+		for _, c := range r.Columns() {
 			types = append(types, c.Type())
 		}
 	}
@@ -41,7 +56,7 @@ func (s *Scope) AvailableTypes() []schema.SqlType {
 func (s *Scope) RefsOfType(t schema.SqlType) []schema.RelationColumn {
 	res := []schema.RelationColumn{}
 	for _, r := range s.Refs {
-		for _, c := range r.Columns {
+		for _, c := range r.Columns() {
 			if c.Type() == t {
 				res = append(res, schema.RelationColumn{Rel: r, Col: c})
 			}

@@ -57,13 +57,66 @@ type TableRef struct {
 func (t *TableRef) Out() string {
 	var buf strings.Builder
 	for i, ref := range t.Refs {
-		buf.WriteString(ref.Name)
+		buf.WriteString(ref.Name())
 		if i < len(t.Refs)-1 {
 			buf.WriteString(", ")
 		}
 	}
 
 	return buf.String()
+}
+
+type InsertStmt struct {
+	*Prod
+	LocalScope *Scope
+	Table      *schema.Table
+	// If len == 0 then default values used in
+	// insert statement
+	Exprs []ValueExpr
+}
+
+func NewInsertStmt(p *Prod, s *Scope, t schema.NamedRelation) *InsertStmt {
+	tab, ok := t.(*schema.Table)
+	if !ok {
+		panic("type assertion failed")
+	}
+	p = NewProd(p)
+	s = NewScope(s)
+
+	stmt := &InsertStmt{
+		Prod:       p,
+		LocalScope: s,
+		Table:      tab,
+	}
+
+	stmt.Scope = s
+
+	return stmt
+}
+
+func (i *InsertStmt) Out() string {
+	var buffer strings.Builder
+
+	buffer.WriteString("INSERT INTO ")
+	buffer.WriteString(i.Table.Name())
+	buffer.WriteString(" ")
+
+	if len(i.Exprs) == 0 {
+		buffer.WriteString("DEFAULT VALUES")
+		return buffer.String()
+	}
+
+	buffer.WriteString("VALUES (")
+
+	for idx, expr := range i.Exprs {
+		if idx > 0 {
+			buffer.WriteString(", ")
+		}
+		buffer.WriteString(expr.Out())
+	}
+	buffer.WriteString(")")
+
+	return buffer.String()
 }
 
 // selectStmt represents a SELECT query

@@ -20,12 +20,9 @@ func generateTable(num int) *schema.Schema {
 	schm := &schema.Schema{}
 
 	for i := range num {
-		tab := schema.Table{
-			Schema: "public",
-			Name:   fmt.Sprintf("t%d", i),
-		}
 		nCols := 2 + rand.Intn(9)
 
+		cols := make([]schema.Column, nCols)
 		for i := range nCols {
 			col := schema.Column{
 				Name: fmt.Sprintf("c%d", i),
@@ -37,8 +34,9 @@ func generateTable(num int) *schema.Schema {
 			// TODO: randomly add unique
 			// TODO: randomly add default
 
-			tab.Cols = append(tab.Cols, col)
+			cols[i] = col
 		}
+		tab := schema.NewTable(fmt.Sprintf("t%d", i), cols)
 		// TODO: randomly reference another table
 
 		schm.Tables = append(schm.Tables, tab)
@@ -46,27 +44,44 @@ func generateTable(num int) *schema.Schema {
 	return schm
 }
 
-func generateStatement(s *ast.Scope) (ast.Production, error) {
+func generateStatement(s *ast.Scope) ast.Production {
 	// TODO: add remaining statements
 	p := &ast.Prod{
 		Scope: s,
 	}
+	if d42() == 1 {
+		return generateInsert(p, s)
+	}
 	return generateSelect(p, s)
 }
 
+// generateInsert picks a random table and then generates
+// values expressions for each column
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L374
+func generateInsert(p *ast.Prod, s *ast.Scope) *ast.InsertStmt {
+	victim := randomPick(s.Tables)
+	stmt := ast.NewInsertStmt(p, s, victim)
+
+	assert(len(stmt.Scope.Refs) == 0, "expected zero references in insert stmt")
+	assert(len(stmt.LocalScope.Refs) == 0, "expected zero references in insert stmt")
+
+	for _, col := range stmt.Table.Columns() {
+		expr := generateValueExpression(p, col.Typ)
+		stmt.Exprs = append(stmt.Exprs, expr)
+	}
+
+	return stmt
+}
+
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L314
-func generateSelect(p *ast.Prod, s *ast.Scope) (*ast.SelectStmt, error) {
+func generateSelect(p *ast.Prod, s *ast.Scope) *ast.SelectStmt {
 	stmt := ast.NewSelectStmt(p, s, true)
 
 	if d100() == 1 {
 		stmt.SetQuantifier = "distinct"
 	}
 
-	var err error
-	stmt.FromClause, err = generateFromClause(stmt.Prod)
-	if err != nil {
-		return nil, err
-	}
+	stmt.FromClause = generateFromClause(stmt.Prod)
 	// needs to be run after fromClause to ensure `Refs`
 	// are available
 	stmt.SelectList = generateSelectClause(stmt.Prod)
@@ -76,11 +91,11 @@ func generateSelect(p *ast.Prod, s *ast.Scope) (*ast.SelectStmt, error) {
 		stmt.LimitClause = fmt.Sprintf("LIMIT %d", d100()+d100())
 	}
 
-	return stmt, nil
+	return stmt
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L200
-func generateFromClause(p *ast.Prod) (*ast.FromClause, error) {
+func generateFromClause(p *ast.Prod) *ast.FromClause {
 	f := &ast.FromClause{Prod: p, TableRefs: []ast.TableRef{}}
 
 	// we need at least one reference in FROM clause
@@ -93,7 +108,7 @@ func generateFromClause(p *ast.Prod) (*ast.FromClause, error) {
 	// TODO: add lateral subquery
 	// for d6() > 5 {
 	// }
-	return f, nil
+	return f
 }
 
 // generates list of expressions for the select clause
@@ -142,7 +157,7 @@ func generateTableRef(p *ast.Prod) ast.TableRef {
 
 	return ast.TableRef{
 		Prod: p,
-		Refs: []schema.NamedRelation{{Name: alias, Columns: t.Columns}},
+		Refs: []schema.NamedRelation{schema.NewTable(alias, t.Columns())},
 	}
 }
 
@@ -151,10 +166,10 @@ func generateTableRef(p *ast.Prod) ast.TableRef {
 func generateColumnReference(p *ast.Prod, t schema.SqlType) ast.ValueExpr {
 	if t == "" {
 		rel := randomPick(p.Scope.Refs)
-		cols := rel.Columns
+		cols := rel.Columns()
 		c := randomPick(cols)
 		return &ast.ColumnReference{
-			Reference: fmt.Sprintf("%s.%s", rel.Name, c.Name),
+			Reference: fmt.Sprintf("%s.%s", rel.Name(), c.Name),
 			Typ:       c.Typ,
 		}
 	}
@@ -168,7 +183,7 @@ func generateColumnReference(p *ast.Prod, t schema.SqlType) ast.ValueExpr {
 	pick := randomPick(pairs)
 
 	return &ast.ColumnReference{
-		Reference: fmt.Sprintf("%s.%s", pick.Rel.Name, pick.Col.Name),
+		Reference: fmt.Sprintf("%s.%s", pick.Rel.Name(), pick.Col.Name),
 		Typ:       pick.Col.Typ,
 	}
 }
@@ -283,5 +298,15 @@ func generateComparisonOperation(p *ast.Prod) *ast.BoolExpr {
 		Left:  left,
 		Op:    op,
 		Right: right,
+	}
+}
+
+// ------ //
+// Helper //
+// ------ //
+
+func assert(b bool, rsn string) {
+	if !b {
+		panic(rsn)
 	}
 }
