@@ -12,11 +12,16 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// This test generates a random schema and 1k queries
-// 5k times to ensure we generate syntactically and
-// semantically valid queries
-// NOTE: currently takes ~300 seconds
+// The goal of these tests is to generate a large
+// variety of random SQL statements and ensure they
+// are syntactically and semantically correct i.e.
+// do not cause errors when executed on sqlite3.
+// The tests generate 5 million queries per type
+// (select, insert, update, delete) and executes
+// them.
+
 func TestSelectGeneration(t *testing.T) {
+	t.Parallel()
 
 	nIter := 5_000
 	for range nIter {
@@ -73,9 +78,9 @@ func TestSelectGeneration(t *testing.T) {
 	}
 }
 
-// TestInsertGeneration generates a random schema and 1k insert statements
-// 5k times to ensure we generate syntactically and semantically valid inserts
 func TestInsertGeneration(t *testing.T) {
+	t.Parallel()
+
 	nIter := 5_000
 	for range nIter {
 		db, err := sql.Open("sqlite3", ":memory:")
