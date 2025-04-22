@@ -119,6 +119,73 @@ func (i *InsertStmt) Out() string {
 	return buffer.String()
 }
 
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L247
+type UpdateStmt struct {
+	*Prod
+	LocalScope *Scope
+	Table      *schema.Table
+	SetClause  *SetClause
+	Where      *BoolExpr
+}
+
+func NewUpdateStmt(p *Prod, s *Scope, t schema.NamedRelation) *UpdateStmt {
+	tab, ok := t.(*schema.Table)
+	if !ok {
+		panic("type assertion failed")
+	}
+	p = NewProd(p)
+	s = NewScope(s)
+
+	stmt := &UpdateStmt{
+		Prod:       p,
+		LocalScope: s,
+		Table:      tab,
+	}
+
+	stmt.Scope = s
+
+	return stmt
+}
+
+func (u *UpdateStmt) Out() string {
+	var buf strings.Builder
+
+	buf.WriteString("UPDATE ")
+	buf.WriteString(u.Table.Name() + " ")
+	buf.WriteString("\n")
+	buf.WriteString(u.SetClause.Out())
+	buf.WriteString("\n")
+	buf.WriteString("WHERE ")
+	buf.WriteString(u.Where.Out())
+
+	return buf.String()
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L217
+type SetClause struct {
+	*Prod
+	Values []ValueExpr
+	Names  []string
+}
+
+func (c *SetClause) Out() string {
+	var buf strings.Builder
+
+	buf.WriteString("SET ")
+
+	for i := range len(c.Names) {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+
+		buf.WriteString(c.Names[i])
+		buf.WriteString(" = ")
+		buf.WriteString(c.Values[i].Out())
+	}
+
+	return buf.String()
+}
+
 // selectStmt represents a SELECT query
 type SelectStmt struct {
 	*Prod

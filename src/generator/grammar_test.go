@@ -144,3 +144,62 @@ func TestInsertGeneration(t *testing.T) {
 		db.Close()
 	}
 }
+
+func TestUpdateGeneration(t *testing.T) {
+	t.Parallel()
+
+	nIter := 5_000
+	for range nIter {
+		db, err := sql.Open("sqlite3", ":memory:")
+		if err != nil {
+			t.Fatalf("Failed to open database: %v", err)
+		}
+
+		// each new connection creates a new in-memory db
+		ctx, cancel := context.WithCancel(context.Background())
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get db connection: %v", err)
+		}
+
+		// create schema
+		sch := generateTable(1)
+		schemaSQL := sch.Out()
+		for stmt := range strings.SplitSeq(schemaSQL, ";") {
+			if stmt = strings.TrimSpace(stmt); stmt == "" {
+				continue
+			}
+			_, err = conn.ExecContext(ctx, stmt)
+			if err != nil {
+				t.Fatalf("Failed to execute schema creation: %v\nSQL: %s", err, stmt)
+			}
+		}
+
+		// generate updates
+		nUpdates := 1_000
+		for j := range nUpdates {
+			s := &ast.Scope{
+				Tables:  sch.Tables,
+				Schema:  sch,
+				Refs:    []schema.NamedRelation{},
+				StmtSeq: make(map[string]uint),
+			}
+
+			p := &ast.Prod{
+				Scope: s,
+			}
+
+			updateStmt := generateUpdate(p, s)
+			updateSQL := updateStmt.Out()
+
+			_, err := conn.ExecContext(ctx, updateSQL)
+			if err != nil {
+				t.Errorf("Failed to execute update %d: %v\nSchema: %s\nSQL: %s", j+1, err, schemaSQL, updateSQL)
+			}
+		}
+
+		cancel()
+		conn.Close()
+		db.Close()
+	}
+}

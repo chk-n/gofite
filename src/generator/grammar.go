@@ -51,6 +51,8 @@ func generateStatement(s *ast.Scope) ast.Production {
 	}
 	if d42() == 1 {
 		return generateInsert(p, s)
+	} else if d42() == 1 {
+		return generateUpdate(p, s)
 	}
 	return generateSelect(p, s)
 }
@@ -70,6 +72,43 @@ func generateInsert(p *ast.Prod, s *ast.Scope) *ast.InsertStmt {
 		stmt.Exprs = append(stmt.Exprs, expr)
 	}
 
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L433
+func generateUpdate(p *ast.Prod, s *ast.Scope) *ast.UpdateStmt {
+	victim := randomPick(s.Tables)
+	stmt := ast.NewUpdateStmt(p, s, victim)
+
+	s.Refs = append(s.Refs, victim)
+	stmt.Where = generateBoolExpression(p)
+	stmt.SetClause = generateSetClause(p, victim)
+
+	// NOTE: maybe we can combine update_stmt and update_returning
+	// as one struct. I am not sure why sqlsmith has two seperate
+	// classes for this.
+
+	return stmt
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L408
+func generateSetClause(p *ast.Prod, t schema.NamedRelation) *ast.SetClause {
+	t, ok := t.(*schema.Table)
+	assert(ok, "expected type to be of *schema.Table")
+start:
+	clause := &ast.SetClause{}
+	for _, col := range t.Columns() {
+		if d6() < 4 {
+			continue
+		}
+		expr := generateValueExpression(p, col.Type())
+		clause.Values = append(clause.Values, expr)
+		clause.Names = append(clause.Names, col.Name)
+	}
+	// ensure we get at least one column in update
+	if len(clause.Values) == 0 {
+		goto start
+	}
+
+	return clause
+}
 	return stmt
 }
 
