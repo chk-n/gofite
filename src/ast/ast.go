@@ -264,22 +264,22 @@ func NewSelectStmt(p *Prod, s *Scope, lateral bool) *SelectStmt {
 
 func (q *SelectStmt) Out() string {
 	// TODO: get indentation from level
-	var builder strings.Builder
-	builder.WriteString("SELECT ")
+	var buf strings.Builder
+	buf.WriteString("SELECT ")
 	if q.SetQuantifier != "" {
-		builder.WriteString(q.SetQuantifier + " ")
+		buf.WriteString(q.SetQuantifier + " ")
 	}
-	builder.WriteString(q.SelectList.Out())
-	builder.WriteString("\n")
-	builder.WriteString(q.FromClause.Out())
-	builder.WriteString("\n")
-	builder.WriteString("WHERE ")
-	builder.WriteString(q.WhereClause.Out())
+	buf.WriteString(q.SelectList.Out())
+	buf.WriteString("\n")
+	buf.WriteString(q.FromClause.Out())
+	buf.WriteString("\n")
+	buf.WriteString("WHERE ")
+	buf.WriteString(q.WhereClause.Out())
 	if q.LimitClause != "" {
-		builder.WriteString("\n")
-		builder.WriteString(q.LimitClause)
+		buf.WriteString("\n")
+		buf.WriteString(q.LimitClause)
 	}
-	return builder.String()
+	return buf.String()
 }
 
 // fromClause represents the FROM part of a query
@@ -289,15 +289,15 @@ type FromClause struct {
 }
 
 func (f *FromClause) Out() string {
-	var builder strings.Builder
-	builder.WriteString("FROM ")
+	var buf strings.Builder
+	buf.WriteString("FROM ")
 	for i, ref := range f.TableRefs {
-		builder.WriteString(ref.Out())
+		buf.WriteString(ref.Out())
 		if i < len(f.TableRefs)-1 {
-			builder.WriteString(", ")
+			buf.WriteString(", ")
 		}
 	}
-	return builder.String()
+	return buf.String()
 }
 
 // type TableOrQueryName struct {
@@ -331,16 +331,16 @@ type SelectClause struct {
 }
 
 func (s *SelectClause) Out() string {
-	var builder strings.Builder
+	var buf strings.Builder
 	for i, expr := range s.ValueExprs {
-		builder.WriteString(expr.Out())
-		builder.WriteString(" AS ")
-		builder.WriteString(s.DerivedColumns[i].Ident())
+		buf.WriteString(expr.Out())
+		buf.WriteString(" AS ")
+		buf.WriteString(s.DerivedColumns[i].Ident())
 		if i < len(s.ValueExprs)-1 {
-			builder.WriteString(", ")
+			buf.WriteString(", ")
 		}
 	}
-	return builder.String()
+	return buf.String()
 }
 
 // ----------------- //
