@@ -53,6 +53,8 @@ func generateStatement(s *ast.Scope) ast.Production {
 		return generateInsert(p, s)
 	} else if d42() == 1 {
 		return generateUpdate(p, s)
+	} else if d42() == 1 {
+		return generateDelete(p, s)
 	}
 	return generateSelect(p, s)
 }
@@ -109,6 +111,16 @@ start:
 
 	return clause
 }
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L362
+func generateDelete(p *ast.Prod, s *ast.Scope) *ast.DeleteStmt {
+
+	victim := randomPick(s.Tables)
+	stmt := ast.NewDeleteStmt(p, s, victim)
+
+	s.Refs = append(s.Refs, victim)
+	stmt.Where = generateBoolExpression(p)
+
 	return stmt
 }
 

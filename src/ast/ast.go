@@ -186,6 +186,47 @@ func (c *SetClause) Out() string {
 	return buf.String()
 }
 
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L177
+type DeleteStmt struct {
+	*Prod
+	LocalScope *Scope
+	Table      *schema.Table
+	Where      *BoolExpr
+}
+
+// NOTE: these `modifying_stmt` are all the same. We should
+// probs refactor
+func NewDeleteStmt(p *Prod, s *Scope, t schema.NamedRelation) *DeleteStmt {
+	tab, ok := t.(*schema.Table)
+	if !ok {
+		panic("type assertion failed")
+	}
+	p = NewProd(p)
+	s = NewScope(s)
+
+	stmt := &DeleteStmt{
+		Prod:       p,
+		LocalScope: s,
+		Table:      tab,
+	}
+
+	stmt.Scope = s
+
+	return stmt
+}
+
+func (s *DeleteStmt) Out() string {
+	var buf strings.Builder
+
+	buf.WriteString("DELETE FROM ")
+	buf.WriteString(s.Table.Name())
+	buf.WriteString("\n")
+	buf.WriteString("WHERE ")
+	buf.WriteString(s.Where.Out())
+
+	return buf.String()
+}
+
 // selectStmt represents a SELECT query
 type SelectStmt struct {
 	*Prod
