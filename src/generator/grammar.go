@@ -14,6 +14,8 @@ var types = []schema.SqlType{
 	"BOOLEAN", "DATE", "TIME", "DATETIME", "NULL",
 }
 
+// TODO: maybe we can also generate random ALTER TABLE stmts
+
 // generateTable takes number of tables and an empty scope
 // and generates 'num' tables and populates scope
 func generateTable(num int) *schema.Schema {
@@ -49,13 +51,19 @@ func generateStatement(s *ast.Scope) ast.Production {
 	p := &ast.Prod{
 		Scope: s,
 	}
+
 	if d42() == 1 {
 		return generateInsert(p, s)
 	} else if d42() == 1 {
 		return generateUpdate(p, s)
 	} else if d42() == 1 {
 		return generateDelete(p, s)
+	} /*else if d42() == 1 {
+		return generateCommonTableExpression(p, s)
+	} else if d42() == 1 {
+		return generateUpsert(p, s)
 	}
+	*/
 	return generateSelect(p, s)
 }
 
@@ -69,10 +77,19 @@ func generateInsert(p *ast.Prod, s *ast.Scope) *ast.InsertStmt {
 	assert(len(stmt.Scope.Refs) == 0, "expected zero references in insert stmt")
 	assert(len(stmt.LocalScope.Refs) == 0, "expected zero references in insert stmt")
 
+	// TODO: randomly generate INSERT OR REPLACE
+	// or INSERT OR IGNORE
+
 	for _, col := range stmt.Table.Columns() {
 		expr := generateValueExpression(p, col.Typ)
 		stmt.Exprs = append(stmt.Exprs, expr)
 	}
+
+	// NOTE: should we add optional ON CONFLICT clause?
+	// or generate conflicting inserts on purpose
+
+	return stmt
+}
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L433
 func generateUpdate(p *ast.Prod, s *ast.Scope) *ast.UpdateStmt {
@@ -94,6 +111,7 @@ func generateUpdate(p *ast.Prod, s *ast.Scope) *ast.UpdateStmt {
 func generateSetClause(p *ast.Prod, t schema.NamedRelation) *ast.SetClause {
 	t, ok := t.(*schema.Table)
 	assert(ok, "expected type to be of *schema.Table")
+
 start:
 	clause := &ast.SetClause{}
 	for _, col := range t.Columns() {
