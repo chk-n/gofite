@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/cnordg/ast-group-project/src/ast"
@@ -27,11 +26,10 @@ var in io.WriteCloser
 
 func TestMain(m *testing.M) {
 	// launch container
-	untarCmd := exec.Command("unzip", "sqlite3-test.zip")
-	var errBuf bytes.Buffer
-	untarCmd.Stderr = &errBuf
-	if err := untarCmd.Run(); err != nil && !strings.Contains(errBuf.String(), "File exist") {
-		panic(fmt.Sprintf("failed to uncompress .tar.xz: %v", err))
+	untarCmd := exec.Command("unzip", "-o", "sqlite3-test.zip")
+	untarCmd.Stderr = os.Stderr
+	if err := untarCmd.Run(); err != nil {
+		panic(fmt.Sprintf("failed to uncompress .zip: %v", err))
 	}
 	cmd := exec.Command("docker", "load", "-i", "sqlite3-test.tar")
 	cmd.Stderr = os.Stderr
