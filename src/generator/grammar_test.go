@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/cnordg/ast-group-project/src/ast"
@@ -26,6 +27,12 @@ var in io.WriteCloser
 
 func TestMain(m *testing.M) {
 	// launch container
+	untarCmd := exec.Command("unzip", "sqlite3-test.zip")
+	var errBuf bytes.Buffer
+	untarCmd.Stderr = &errBuf
+	if err := untarCmd.Run(); err != nil && !strings.Contains(errBuf.String(), "File exist") {
+		panic(fmt.Sprintf("failed to uncompress .tar.xz: %v", err))
+	}
 	cmd := exec.Command("docker", "load", "-i", "sqlite3-test.tar")
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -38,7 +45,7 @@ func TestMain(m *testing.M) {
 	}
 	containerId = string(output)[:12]
 
-	// initialise persistent in memory db
+	// initialise persistent in-memory db
 	execCmd := exec.Command("docker", "exec", "-i", containerId, "/usr/bin/sqlite3-3.26.0", "-interactive", ":memory:")
 	var stderr bytes.Buffer
 	execCmd.Stderr = &stderr
@@ -51,7 +58,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// NOTE: did some testing but nothing
-	// dramatically reduced execution speed
+	// dramatically reduced execution time
 	// https://www.sqlite.org/pragma.html
 	// initCommands := []string{
 	// 	"PRAGMA synchronous=OFF;",
