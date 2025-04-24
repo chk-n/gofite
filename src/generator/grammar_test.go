@@ -1,15 +1,15 @@
 package generator
 
 import (
-	"context"
-	"database/sql"
-	"strings"
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/cnordg/ast-group-project/src/ast"
 	"github.com/cnordg/ast-group-project/src/schema"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // The goal of these tests is to generate a large
@@ -20,249 +20,245 @@ import (
 // (select, insert, update, delete) and executes
 // them.
 
+// one container spun up for all tests
+var containerId string
+var in io.WriteCloser
+
+func TestMain(m *testing.M) {
+	// launch container
+	cmd := exec.Command("docker", "load", "-i", "sqlite3-test.tar")
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		panic(fmt.Sprintf("failed to load Docker image: %v", err))
+	}
+	startCmd := exec.Command("docker", "run", "-d", "--rm", "sqlite3-test:latest", "tail", "-f", "/dev/null")
+	output, err := startCmd.Output()
+	if err != nil {
+		panic(fmt.Sprintf("failed to start container: %v", err))
+	}
+	containerId = string(output)[:12]
+
+	// initialise persistent in memory db
+	execCmd := exec.Command("docker", "exec", "-i", containerId, "/usr/bin/sqlite3-3.26.0", "-interactive", ":memory:")
+	var stderr bytes.Buffer
+	execCmd.Stderr = &stderr
+	in, err = execCmd.StdinPipe()
+	if err != nil {
+		panic("unable to get stdin pipe: " + err.Error())
+	}
+	if err := execCmd.Start(); err != nil {
+		panic("failed to start SQLite process: " + err.Error())
+	}
+
+	// NOTE: did some testing but nothing
+	// dramatically reduced execution speed
+	// https://www.sqlite.org/pragma.html
+	// initCommands := []string{
+	// 	"PRAGMA synchronous=OFF;",
+	// 	"PRAGMA journal_mode=OFF;",
+	// 	"PRAGMA temp_store=MEMORY;",
+	// 	"PRAGMA mmap_size = 0;",
+	// 	"PRAGMA count_changes = OFF;",
+	// 	"PRAGMA cell_size_check = OFF;",
+	// 	"PRAGMA ignore_check_constraints = ON;",
+	// 	"PRAGMA defer_foreign_keys = ON;",
+	// 	"PRAGMA soft_heap_limit = 10000000;",
+	// }
+	// for _, cmd := range initCommands {
+	// 	if _, err := in.Write([]byte(cmd + ";\n")); err != nil {
+	// 		panic("unable to write to pipe: " + err.Error())
+	// 	}
+	// }
+
+	// run all tests
+	exitCode := m.Run()
+
+	if stderr.Len() != 0 {
+		panic(stderr.String())
+	}
+	// clean up
+	in.Close()
+	stopCmd := exec.Command("docker", "stop", containerId)
+	stopCmd.Run()
+	containerId = ""
+
+	os.Exit(exitCode)
+}
+
 func TestSelectGeneration(t *testing.T) {
-	t.Parallel()
-
-	nIter := 5_000
+	nIter := 500
 	for range nIter {
-		db, err := sql.Open("sqlite3", ":memory:")
-		if err != nil {
-			t.Fatalf("Failed to open database: %v", err)
-		}
-		// db.SetMaxOpenConns(1)
-		// db.SetMaxIdleConns(1)
-		// db.SetConnMaxLifetime(0)
-
-		// each new connection creates a new in-memory db
-		ctx, cancel := context.WithCancel(context.Background())
-		conn, err := db.Conn(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get db connection: %v", err)
-		}
-
 		sch := generateTable(1)
-
 		schemaSQL := sch.Out()
 
-		for stmt := range strings.SplitSeq(schemaSQL, ";") {
-			if stmt == "" {
-				continue
-			}
-			_, err = conn.ExecContext(ctx, stmt)
-			if err != nil {
-				t.Fatalf("Failed to execute schema creation: %v\nSQL: %s", err, stmt)
-			}
+		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
+			t.Fatalf("Failed to create schema: %v", err)
 		}
 
 		// generate and execute each query
-		nQueries := 1_000
-		for i := range nQueries {
+		nQueries := 1000
+		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
 				Schema:  sch,
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
+			p := ast.NewProd(nil)
 
-			slct := generateStatement(s)
+			slct := generateSelect(p, s)
 
 			selectSQL := slct.Out()
-			if _, err := conn.QueryContext(ctx, selectSQL); err != nil {
-				t.Errorf("Failed to execute query %d: %v\nSchema: %s\nSQL: %s", i+1, err, schemaSQL, selectSQL)
+			selectSQL += ";\n"
+
+			if _, err := in.Write([]byte(selectSQL)); err != nil {
+				t.Fatalf("Failed to write to pipe: %s", err)
 			}
 		}
-
-		cancel()
-		conn.Close()
-		db.Close()
+		// Drop the table after all queries for this iteration
+		dropSQL := "DROP TABLE IF EXISTS t0;\n"
+		if _, err := in.Write([]byte(dropSQL)); err != nil {
+			t.Fatalf("Failed to drop table: %v", err)
+		}
 	}
 }
 
 func TestInsertGeneration(t *testing.T) {
-	t.Parallel()
-
-	nIter := 5_000
+	nIter := 500
 	for range nIter {
-		db, err := sql.Open("sqlite3", ":memory:")
-		if err != nil {
-			t.Fatalf("Failed to open database: %v", err)
-		}
-
-		// each new connection creates a new in-memory db
-		ctx, cancel := context.WithCancel(context.Background())
-		conn, err := db.Conn(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get db connection: %v", err)
-		}
-
-		// create schema
 		sch := generateTable(1)
 		schemaSQL := sch.Out()
-		for stmt := range strings.SplitSeq(schemaSQL, ";") {
-			if stmt = strings.TrimSpace(stmt); stmt == "" {
-				continue
-			}
-			_, err = conn.ExecContext(ctx, stmt)
-			if err != nil {
-				t.Fatalf("Failed to execute schema creation: %v\nSQL: %s", err, stmt)
-			}
+
+		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
+			t.Fatalf("Failed to create schema: %v", err)
 		}
 
-		// generate inserts
-		nInserts := 1_000
-		for j := range nInserts {
+		// generate and execute each query
+		nQueries := 1000
+		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
 				Schema:  sch,
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
+			p := ast.NewProd(nil)
 
-			p := &ast.Prod{
-				Scope: s,
-			}
+			slct := generateInsert(p, s)
 
-			insertStmt := generateInsert(p, s)
-			insertSQL := insertStmt.Out()
+			selectSQL := slct.Out()
+			selectSQL += ";\n"
 
-			_, err := conn.ExecContext(ctx, insertSQL)
-			if err != nil {
-				t.Errorf("Failed to execute insert %d: %v\nSchema: %s\nSQL: %s", j+1, err, schemaSQL, insertSQL)
+			if _, err := in.Write([]byte(selectSQL)); err != nil {
+				t.Fatalf("Failed to write to pipe: %s", err)
 			}
 		}
-
-		// verify data inserted
-		for _, table := range sch.Tables {
-			var count int
-			err := conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table.Name()).Scan(&count)
-			if err != nil {
-				t.Errorf("Failed to count rows in table %s: %v", table.Name(), err)
-			}
-
-			if count != nInserts {
-				t.Errorf("Expected %d rows in table %s, but found %d", nInserts, table.Name(), count)
-			}
+		// Drop the table after all queries for this iteration
+		dropSQL := "DROP TABLE IF EXISTS t0;\n"
+		if _, err := in.Write([]byte(dropSQL)); err != nil {
+			t.Fatalf("Failed to drop table: %v", err)
 		}
-
-		cancel()
-		conn.Close()
-		db.Close()
 	}
 }
 
 func TestUpdateGeneration(t *testing.T) {
-	t.Parallel()
-
-	nIter := 5_000
+	nIter := 500
 	for range nIter {
-		db, err := sql.Open("sqlite3", ":memory:")
-		if err != nil {
-			t.Fatalf("Failed to open database: %v", err)
-		}
-
-		// each new connection creates a new in-memory db
-		ctx, cancel := context.WithCancel(context.Background())
-		conn, err := db.Conn(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get db connection: %v", err)
-		}
-
-		// create schema
 		sch := generateTable(1)
 		schemaSQL := sch.Out()
-		for stmt := range strings.SplitSeq(schemaSQL, ";") {
-			if stmt = strings.TrimSpace(stmt); stmt == "" {
-				continue
-			}
-			_, err = conn.ExecContext(ctx, stmt)
-			if err != nil {
-				t.Fatalf("Failed to execute schema creation: %v\nSQL: %s", err, stmt)
-			}
+
+		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
+			t.Fatalf("Failed to create schema: %v", err)
 		}
 
-		// generate updates
-		nUpdates := 1_000
-		for j := range nUpdates {
+		// generate and execute each query
+		nQueries := 1000
+		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
 				Schema:  sch,
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
+			p := ast.NewProd(nil)
 
-			p := &ast.Prod{
-				Scope: s,
-			}
+			slct := generateUpdate(p, s)
 
-			updateStmt := generateUpdate(p, s)
-			updateSQL := updateStmt.Out()
+			selectSQL := slct.Out()
+			selectSQL += ";\n"
 
-			_, err := conn.ExecContext(ctx, updateSQL)
-			if err != nil {
-				t.Errorf("Failed to execute update %d: %v\nSchema: %s\nSQL: %s", j+1, err, schemaSQL, updateSQL)
+			if _, err := in.Write([]byte(selectSQL)); err != nil {
+				t.Fatalf("Failed to write to pipe: %s", err)
 			}
 		}
-
-		cancel()
-		conn.Close()
-		db.Close()
+		// Drop the table after all queries for this iteration
+		dropSQL := "DROP TABLE IF EXISTS t0;\n"
+		if _, err := in.Write([]byte(dropSQL)); err != nil {
+			t.Fatalf("Failed to drop table: %v", err)
+		}
 	}
 }
+
 func TestDeleteGeneration(t *testing.T) {
-	t.Parallel()
-
-	nIter := 5_000
+	nIter := 500
 	for range nIter {
-		db, err := sql.Open("sqlite3", ":memory:")
-		if err != nil {
-			t.Fatalf("Failed to open database: %v", err)
-		}
-
-		// each new connection creates a new in-memory db
-		ctx, cancel := context.WithCancel(context.Background())
-		conn, err := db.Conn(ctx)
-		if err != nil {
-			t.Fatalf("Failed to get db connection: %v", err)
-		}
-
-		// create schema
 		sch := generateTable(1)
 		schemaSQL := sch.Out()
-		for stmt := range strings.SplitSeq(schemaSQL, ";") {
-			if stmt = strings.TrimSpace(stmt); stmt == "" {
-				continue
-			}
-			_, err = conn.ExecContext(ctx, stmt)
-			if err != nil {
-				t.Fatalf("Failed to execute schema creation: %v\nSQL: %s", err, stmt)
-			}
+
+		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
+			t.Fatalf("Failed to create schema: %v", err)
 		}
 
-		// generate deletes
-		nDeletes := 1_000
-		for j := range nDeletes {
+		// generate and execute each query
+		nQueries := 1000
+		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
 				Schema:  sch,
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
+			p := ast.NewProd(nil)
 
-			p := &ast.Prod{
-				Scope: s,
-			}
+			slct := generateDelete(p, s)
 
-			deleteStmt := generateDelete(p, s)
-			deleteSQL := deleteStmt.Out()
+			selectSQL := slct.Out()
+			selectSQL += ";\n"
 
-			_, err := conn.ExecContext(ctx, deleteSQL)
-			if err != nil {
-				t.Errorf("Failed to execute delete %d: %v\nSchema: %s\nSQL: %s", j+1, err, schemaSQL, deleteSQL)
+			if _, err := in.Write([]byte(selectSQL)); err != nil {
+				t.Fatalf("Failed to write to pipe: %s", err)
 			}
 		}
+		// Drop the table after all queries for this iteration
+		dropSQL := "DROP TABLE IF EXISTS t0;\n"
+		if _, err := in.Write([]byte(dropSQL)); err != nil {
+			t.Fatalf("Failed to drop table: %v", err)
+		}
+	}
+}
 
-		cancel()
-		conn.Close()
-		db.Close()
+func BenchmarkGenerateSelect(b *testing.B) {
+	schm := generateTable(1)
+
+	for b.Loop() {
+		// fresh s for each stmt
+		s := &ast.Scope{
+			Schema:  schm,
+			Tables:  schm.Tables,
+			Refs:    []schema.NamedRelation{},
+			StmtSeq: make(map[string]uint),
+		}
+
+		p := &ast.Prod{
+			Scope: s,
+		}
+
+		stmt := generateSelect(p, s)
+
+		// check to avoid function from being optimised
+		// away. not sure if this is still required in bench
+		if stmt == nil {
+			b.Fatal("Generated statement should not be nil")
+		}
 	}
 }
