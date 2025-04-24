@@ -48,23 +48,21 @@ func generateTable(num int) *schema.Schema {
 
 func generateStatement(s *ast.Scope) ast.Production {
 	// TODO: add remaining statements
-	p := &ast.Prod{
-		Scope: s,
-	}
+	//
 
 	if d42() == 1 {
-		return generateInsert(p, s)
+		return generateInsert(nil, s)
 	} else if d42() == 1 {
-		return generateUpdate(p, s)
+		return generateUpdate(nil, s)
 	} else if d42() == 1 {
-		return generateDelete(p, s)
+		return generateDelete(nil, s)
 	} /*else if d42() == 1 {
 		return generateCommonTableExpression(p, s)
 	} else if d42() == 1 {
 		return generateUpsert(p, s)
 	}
 	*/
-	return generateSelect(p, s)
+	return generateSelect(nil, s)
 }
 
 // generateInsert picks a random table and then generates
@@ -81,7 +79,7 @@ func generateInsert(p *ast.Prod, s *ast.Scope) *ast.InsertStmt {
 	// or INSERT OR IGNORE
 
 	for _, col := range stmt.Table.Columns() {
-		expr := generateValueExpression(p, col.Typ)
+		expr := generateValueExpression(stmt.Prod, col.Typ)
 		stmt.Exprs = append(stmt.Exprs, expr)
 	}
 
@@ -96,9 +94,9 @@ func generateUpdate(p *ast.Prod, s *ast.Scope) *ast.UpdateStmt {
 	victim := randomPick(s.Tables)
 	stmt := ast.NewUpdateStmt(p, s, victim)
 
-	s.Refs = append(s.Refs, victim)
-	stmt.Where = generateBoolExpression(p)
-	stmt.SetClause = generateSetClause(p, victim)
+	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
+	stmt.Where = generateBoolExpression(stmt.Prod)
+	stmt.SetClause = generateSetClause(stmt.Prod, victim)
 
 	// NOTE: maybe we can combine update_stmt and update_returning
 	// as one struct. I am not sure why sqlsmith has two seperate
@@ -109,16 +107,18 @@ func generateUpdate(p *ast.Prod, s *ast.Scope) *ast.UpdateStmt {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L408
 func generateSetClause(p *ast.Prod, t schema.NamedRelation) *ast.SetClause {
+	p = ast.NewProd(p)
+
 	t, ok := t.(*schema.Table)
 	assert(ok, "expected type to be of *schema.Table")
 
 start:
-	clause := &ast.SetClause{}
+	clause := &ast.SetClause{Prod: p}
 	for _, col := range t.Columns() {
 		if d6() < 4 {
 			continue
 		}
-		expr := generateValueExpression(p, col.Type())
+		expr := generateValueExpression(clause.Prod, col.Type())
 		clause.Values = append(clause.Values, expr)
 		clause.Names = append(clause.Names, col.Name)
 	}
@@ -132,12 +132,11 @@ start:
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L362
 func generateDelete(p *ast.Prod, s *ast.Scope) *ast.DeleteStmt {
-
 	victim := randomPick(s.Tables)
 	stmt := ast.NewDeleteStmt(p, s, victim)
 
-	s.Refs = append(s.Refs, victim)
-	stmt.Where = generateBoolExpression(p)
+	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
+	stmt.Where = generateBoolExpression(stmt.Prod)
 
 	return stmt
 }
@@ -153,7 +152,7 @@ func generateSelect(p *ast.Prod, s *ast.Scope) *ast.SelectStmt {
 	stmt.FromClause = generateFromClause(stmt.Prod)
 	// needs to be run after fromClause to ensure `Refs`
 	// are available
-	stmt.SelectList = generateSelectClause(stmt.Prod)
+	stmt.SelectClause = generateSelectClause(stmt.Prod)
 	stmt.WhereClause = generateBoolExpression(stmt.Prod)
 
 	if d6() > 2 {
@@ -165,24 +164,26 @@ func generateSelect(p *ast.Prod, s *ast.Scope) *ast.SelectStmt {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L200
 func generateFromClause(p *ast.Prod) *ast.FromClause {
-	f := &ast.FromClause{Prod: p, TableRefs: []ast.TableRef{}}
+	clause := &ast.FromClause{Prod: p, TableRefs: []ast.TableRef{}}
 
 	// we need at least one reference in FROM clause
-	f.TableRefs = append(f.TableRefs, generateTableRef(p))
+	clause.TableRefs = append(clause.TableRefs, generateTableRef(clause.Prod))
 
-	for _, r := range f.TableRefs[0].Refs {
-		f.Prod.Scope.Refs = append(f.Prod.Scope.Refs, r)
+	for _, r := range clause.TableRefs[0].References() {
+		clause.Prod.Scope.Refs = append(clause.Prod.Scope.Refs, r)
 	}
 
 	// TODO: add lateral subquery
 	// for d6() > 5 {
 	// }
-	return f
+	return clause
 }
 
 // generates list of expressions for the select clause
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L215
 func generateSelectClause(p *ast.Prod) *ast.SelectClause {
+	p = ast.NewProd(p)
+
 	clause := &ast.SelectClause{
 		ValueExprs:     []ast.ValueExpr{},
 		DerivedColumns: []schema.Column{},
@@ -209,30 +210,176 @@ func generateSelectClause(p *ast.Prod) *ast.SelectClause {
 	return clause
 }
 
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L153
+func generateJoinedTable(p *ast.Prod) *ast.JoinedTable {
+	tab := &ast.JoinedTable{
+		Prod: ast.NewProd(p),
+	}
+
+	tab.Lhs = generateTableRef(tab.Prod)
+	tab.Rhs = generateTableRef(tab.Prod)
+
+	hasOnClause := true
+	if d20() == 1 {
+		tab.Type = "CROSS"
+	} else {
+		// BUG: i have commented this out
+		// as the queries are not properly
+		// generated with NATURAL join. We
+		// need to revisit this in future
+		// if d6() == 1 {
+		// 	tab.Type = "NATURAL "
+		// 	hasOnClause = false
+		// }
+		isInner := false
+		if d6() < 4 {
+			tab.Type += "INNER"
+			isInner = true
+		} else /*if d6() < 4*/ {
+			tab.Type += "LEFT"
+			// NOTE: FULL not supported in 3.26
+			// } else if d6() == 1 {
+			// tab.Type += "FULL"
+			// NOTE> RIGHT not supported in 3.26
+			// } else {
+			// tab.Type += "RIGHT"
+		}
+		if !isInner && d6() == 1 {
+			tab.Type += " OUTER"
+		}
+	}
+	// natural join cant have ON clause
+	if hasOnClause {
+		tab.Condition = generateJoinCondition(tab.Prod, tab.Lhs, tab.Rhs)
+	}
+
+	// copy all lhs and rhs refs to current refs
+	lRefs := tab.Lhs.References()
+	rRefs := tab.Rhs.References()
+	tab.Refs = make([]schema.NamedRelation, len(lRefs)+len(rRefs))
+	for i := range lRefs {
+		tab.Refs[i] = lRefs[i]
+	}
+	for j := range rRefs {
+		i := j + len(lRefs)
+		tab.Refs[i] = rRefs[j]
+	}
+
+	return tab
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L96
+func generateJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCondition {
+	if d6() < 6 {
+		return generateExpressionJoinCondition(p, l, r)
+	}
+	return generateSimpleJoinCondition(p, l, r)
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L109
+func generateSimpleJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCondition {
+	p = ast.NewProd(p)
+	// assert at least one ref in lhs with columns not empty
+	assert(atLeastOneColumn(l.References()), "expected at least one column in refs")
+
+retry:
+	lRef := randomPick(l.References())
+	if len(lRef.Columns()) == 0 {
+		goto retry
+	}
+	rRef := randomPick(r.References())
+	col1 := randomPick(lRef.Columns())
+
+	// assert at least one column with matching type
+	assert(colOfTypeExists(rRef.Columns(), col1.Typ), "expected at least one matching col")
+
+	condition := ""
+	for _, col2 := range rRef.Columns() {
+		if col1.Typ == col2.Typ {
+			condition += lRef.Name() + "." + col1.Name + " = " + rRef.Name() + "." + col2.Name
+			break
+		}
+	}
+
+	if condition == "" {
+		goto retry
+	}
+
+	return &ast.SimpleJoinCondition{
+		Prod:      p,
+		Condition: condition,
+	}
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L138
+func generateExpressionJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCondition {
+	s := ast.NewScope(p.Scope)
+	p = ast.NewProd(p)
+	p.Scope = s
+
+	for _, ref := range l.References() {
+		s.Refs = append(s.Refs, ref)
+	}
+	for _, ref := range r.References() {
+		s.Refs = append(s.Refs, ref)
+	}
+	where := generateBoolExpression(p)
+
+	return &ast.ExpressionJoinCondition{
+		Prod:       p,
+		LocalScope: s,
+		Lhs:        l,
+		Rhs:        r,
+		Where:      where,
+	}
+}
+
 // ---------- //
 // References //
 // ---------- //
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L15
 func generateTableRef(p *ast.Prod) ast.TableRef {
-	// TODO: here we can also generate:
-	// * subquery
-	// * joined table
-	// * table sample
+	if p.Level() < 3+d6() {
+		// if d6() > 3 && p.Level() < d6() {
+		//     return generateTableSubqeury(p)
+		// }
+		if d6() > 3 {
+			return generateJoinedTable(p)
+		}
+	}
+
+	// if d6() > 3 {
+	return generateTableOrQueryName(p)
+	// } else {
+	// TODO
+	// return generateTableSample(p)
+	//}
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L33
+func generateTableOrQueryName(p *ast.Prod) *ast.TableOrQueryName {
+	p = ast.NewProd(p)
+
 	t := randomPick(p.Scope.Tables)
+	assert(t != nil, "expected t to not be nil")
 
-	alias := fmt.Sprintf("t%d", p.Scope.StmtSeq["table"])
+	p.Scope.StmtSeq["c"] = uint(len(t.Columns()))
 	p.Scope.StmtSeq["table"]++
+	alias := fmt.Sprintf("t%d", p.Scope.StmtSeq["table"])
 
-	return ast.TableRef{
-		Prod: p,
-		Refs: []schema.NamedRelation{schema.NewTable(alias, t.Columns())},
+	return &ast.TableOrQueryName{
+		Prod:  p,
+		Table: t,
+		Refs:  []schema.NamedRelation{schema.NewTable(alias, t.Columns())},
 	}
 }
 
 // creates a reference to an existing column
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L77
 func generateColumnReference(p *ast.Prod, t schema.SqlType) ast.ValueExpr {
+	p = ast.NewProd(p)
+
 	if t == "" {
 		rel := randomPick(p.Scope.Refs)
 		cols := rel.Columns()
@@ -274,6 +421,8 @@ func generateValueExpression(p *ast.Prod, t schema.SqlType) ast.ValueExpr {
 // creates a constant expression based on t or existing sqlite types
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L195
 func generateConstantExpression(p *ast.Prod, t schema.SqlType) ast.ValueExpr {
+	p = ast.NewProd(p)
+
 	var value string
 
 	// select random type if not set
@@ -348,17 +497,16 @@ func generateBoolExpression(p *ast.Prod) *ast.BoolExpr {
 	// }
 
 	return generateComparisonOperation(p)
-
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L42
 func generateComparisonOperation(p *ast.Prod) *ast.BoolExpr {
+	p = ast.NewProd(p)
+
 	typ := randomPick(p.Scope.AvailableTypes())
 	left := generateValueExpression(p, typ)
 
-	// TODO: some of these operators do not make sense for all types
-	operators := []string{"=", "<>", "<", ">", "<=", ">="}
-	op := randomPick(operators)
+	op := randomOperatorByType(typ)
 
 	// make sure rhs matches the lhs type
 	right := generateValueExpression(p, typ)
@@ -370,6 +518,20 @@ func generateComparisonOperation(p *ast.Prod) *ast.BoolExpr {
 	}
 }
 
+func randomOperatorByType(t schema.SqlType) string {
+	commonOps := []string{"=", "<>"}
+
+	switch t {
+	case "INTEGER", "REAL", "NUMERIC", "DATE",
+		"TIME", "DATETIME", "TEXT", "BLOB":
+		return randomPick(append(commonOps, "<", ">", "<=", ">="))
+	case "BOOLEAN":
+		return randomPick(commonOps)
+	default:
+		return randomPick(commonOps)
+	}
+}
+
 // ------ //
 // Helper //
 // ------ //
@@ -378,4 +540,22 @@ func assert(b bool, rsn string) {
 	if !b {
 		panic(rsn)
 	}
+}
+
+func atLeastOneColumn(refs []schema.NamedRelation) bool {
+	for _, ref := range refs {
+		if len(ref.Columns()) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func colOfTypeExists(cols []schema.Column, t schema.SqlType) bool {
+	for _, col := range cols {
+		if col.Typ == t {
+			return true
+		}
+	}
+	return false
 }

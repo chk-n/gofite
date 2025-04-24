@@ -30,11 +30,14 @@ type Prod struct {
 // level deeper while keeping the scope
 // the same
 func NewProd(parent *Prod) *Prod {
-	return &Prod{
-		parent: parent,
-		level:  parent.level + 1,
-		Scope:  parent.Scope,
+	if parent != nil {
+		return &Prod{
+			parent: parent,
+			level:  parent.level + 1,
+			Scope:  parent.Scope,
+		}
 	}
+	return &Prod{}
 }
 
 func (p *Prod) Level() int {
@@ -42,28 +45,16 @@ func (p *Prod) Level() int {
 }
 
 func (p *Prod) Indent() string {
-	s := ""
+	s := "\n"
 	for range p.level {
 		s = s + " "
 	}
 	return s
 }
 
-type TableRef struct {
-	*Prod
-	Refs []schema.NamedRelation
-}
-
-func (t *TableRef) Out() string {
-	var buf strings.Builder
-	for i, ref := range t.Refs {
-		buf.WriteString(ref.Name())
-		if i < len(t.Refs)-1 {
-			buf.WriteString(", ")
-		}
-	}
-
-	return buf.String()
+type TableRef interface {
+	Production
+	References() []schema.NamedRelation
 }
 
 type InsertStmt struct {
@@ -228,14 +219,21 @@ func (s *DeleteStmt) Out() string {
 }
 
 // selectStmt represents a SELECT query
+// https://sqlite.org/lang_select.html
 type SelectStmt struct {
 	*Prod
-	LocalScope    *Scope
+	LocalScope *Scope
+	// TODO: add quantifier "ALL"
 	SetQuantifier string
-	SelectList    *SelectClause
+	SelectClause  *SelectClause
 	FromClause    *FromClause
 	WhereClause   *BoolExpr
-	LimitClause   string
+	// TODO: add GROUP BY ... HAVING
+	// TODO: add ORDER BY
+	// TODO: add WINDOW
+	// TODO: add compound op (UNION)
+	LimitClause string
+	// TODO: add OFFSET
 }
 
 func NewSelectStmt(p *Prod, s *Scope, lateral bool) *SelectStmt {
@@ -269,10 +267,10 @@ func (q *SelectStmt) Out() string {
 	if q.SetQuantifier != "" {
 		buf.WriteString(q.SetQuantifier + " ")
 	}
-	buf.WriteString(q.SelectList.Out())
-	buf.WriteString("\n")
+	buf.WriteString(q.SelectClause.Out())
+	buf.WriteString(q.Prod.Indent())
 	buf.WriteString(q.FromClause.Out())
-	buf.WriteString("\n")
+	buf.WriteString(q.Prod.Indent())
 	buf.WriteString("WHERE ")
 	buf.WriteString(q.WhereClause.Out())
 	if q.LimitClause != "" {
@@ -300,19 +298,19 @@ func (f *FromClause) Out() string {
 	return buf.String()
 }
 
-// type TableOrQueryName struct {
-// 	Table schema.NamedRelation
-// 	Refs  []schema.NamedRelation
-// 	Alias string
-// }
+type TableOrQueryName struct {
+	*Prod
+	Table schema.NamedRelation
+	Refs  []schema.NamedRelation
+}
 
-// func (t *TableOrQueryName) Out() string {
-// 	return fmt.Sprintf("%s AS %s", t.Table.Ident(), t.Alias)
-// }
+func (t *TableOrQueryName) Out() string {
+	return fmt.Sprintf("%s AS %s", t.Table.Name(), t.Refs[0].Name())
+}
 
-// func (t *TableOrQueryName) References() []schema.NamedRelation {
-// 	return t.Refs
-// }
+func (t *TableOrQueryName) References() []schema.NamedRelation {
+	return t.Refs
+}
 
 // aliasedRelation represents a relation with an alias
 // type AliasedRelation struct {
@@ -395,4 +393,81 @@ func (b *BoolExpr) Out() string {
 
 func (b *BoolExpr) Type() schema.SqlType {
 	return "BOOLEAN"
+}
+
+//
+
+type JoinCondition interface {
+	joinCondition()
+	Out() string
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L85
+type JoinedTable struct {
+	*Prod
+	// INNER, NATURAL OUTEr etc.
+	Type      string
+	Refs      []schema.NamedRelation
+	Lhs       TableRef
+	Rhs       TableRef
+	Condition JoinCondition
+	Alias     string
+}
+
+func (j *JoinedTable) Ident() string {
+	return j.Alias
+}
+
+func (j *JoinedTable) References() []schema.NamedRelation {
+	return j.Refs
+}
+
+func (j *JoinedTable) Out() string {
+	var buf strings.Builder
+
+	buf.WriteString(j.Lhs.Out())
+	buf.WriteString(j.Prod.Indent())
+	buf.WriteString(j.Type + " JOIN ")
+	if nested, isNestedJoin := j.Rhs.(*JoinedTable); isNestedJoin {
+		// Add parentheses around nested joins
+		buf.WriteString("(")
+		buf.WriteString(j.Prod.Indent())
+		buf.WriteString(nested.Out())
+		buf.WriteString(j.Prod.Indent())
+		buf.WriteString(")")
+	} else {
+		buf.WriteString(j.Rhs.Out())
+		buf.WriteString(j.parent.Indent())
+	}
+
+	if j.Condition != nil {
+		buf.WriteString(" ON (" + j.Condition.Out() + ")")
+	}
+
+	return buf.String()
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L68
+type SimpleJoinCondition struct {
+	*Prod
+	Condition string
+}
+
+func (c *SimpleJoinCondition) joinCondition() {}
+func (c *SimpleJoinCondition) Out() string {
+	return c.Condition
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L74
+type ExpressionJoinCondition struct {
+	*Prod
+	LocalScope *Scope
+	Lhs        TableRef
+	Rhs        TableRef
+	Where      *BoolExpr
+}
+
+func (c *ExpressionJoinCondition) joinCondition() {}
+func (c *ExpressionJoinCondition) Out() string {
+	return c.Where.Out()
 }

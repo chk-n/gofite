@@ -1,6 +1,10 @@
 package ast
 
-import "github.com/cnordg/ast-group-project/src/schema"
+import (
+	"slices"
+
+	"github.com/cnordg/ast-group-project/src/schema"
+)
 
 // Scope keeps track of the available tables,
 // columns and schema that can be used within a
@@ -31,7 +35,7 @@ func NewScope(parent *Scope) *Scope {
 			parent:  parent,
 			Schema:  parent.Schema,
 			Tables:  parent.Tables,
-			Refs:    parent.Refs,
+			Refs:    slices.Clone(parent.Refs),
 			StmtSeq: parent.StmtSeq,
 		}
 	}
