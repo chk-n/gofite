@@ -510,25 +510,33 @@ func generateConstantExpression(p *ast.Prod, t schema.SqlType) ast.ValueExpr {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L96
-func generateBoolExpression(p *ast.Prod) *ast.BoolExpr {
+func generateBoolExpression(p *ast.Prod) ast.BoolExpr {
+	if p.Level() > d100() {
+		return generateTruthExpression(p)
+	}
+	if d6() < 4 {
+		return generateComparisonOperation(p)
+	} else if d6() < 4 {
+		return generateBooleanComparisonOperation(p)
+	} else if d6() < 4 {
+		return generateNullPredicateExpression(p)
+	} else if d6() < 4 {
+		return generateTruthExpression(p)
+	} else {
+		return generateExistsExpression(p)
+	}
+}
 
-	// if d6() < 4 {
-	// 	// return generateComparisonOperation(ctx)
-	// } else if d6() < 4 {
-	// 	// TODO: generate bool term
-	// } else if d6() < 4 {
-	// 	// TODO: generate null predicate
-	// } else if d6() < 4 {
-	// 	// TODO: generate truth value
-	// } else {
-	// 	// TODO: generate exists predicate
-	// }
-
-	return generateComparisonOperation(p)
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.hh#L98
+func generateTruthExpression(p *ast.Prod) ast.BoolExpr {
+	if d6() < 4 {
+		return &ast.TruthExpr{Value: true}
+	}
+	return &ast.TruthExpr{Value: false}
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L42
-func generateComparisonOperation(p *ast.Prod) *ast.BoolExpr {
+func generateComparisonOperation(p *ast.Prod) ast.BoolExpr {
 	p = ast.NewProd(p)
 
 	typ := randomPick(p.Scope.AvailableTypes())
@@ -539,11 +547,45 @@ func generateComparisonOperation(p *ast.Prod) *ast.BoolExpr {
 	// make sure rhs matches the lhs type
 	right := generateValueExpression(p, typ)
 
-	return &ast.BoolExpr{
+	return &ast.BinaryExpr{
 		Left:  left,
 		Op:    op,
 		Right: right,
 	}
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.hh#L147
+func generateBooleanComparisonOperation(p *ast.Prod) ast.BoolExpr {
+	p = ast.NewProd(p)
+
+	left := generateBoolExpression(p)
+	op := randomPick([]string{"AND", "OR"})
+	right := generateBoolExpression(p)
+
+	return &ast.BinaryExpr{
+		Left:  left,
+		Op:    op,
+		Right: right,
+	}
+}
+
+func generateNullPredicateExpression(p *ast.Prod) ast.BoolExpr {
+	p = ast.NewProd(p)
+
+	return &ast.NullPredicateExpr{
+		Negate: d6() < 4,
+		Expr:   generateValueExpression(p, ""),
+	}
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L119
+func generateExistsExpression(p *ast.Prod) ast.BoolExpr {
+	p = ast.NewProd(p)
+	exp := &ast.ExistsExpr{
+		Prod:     p,
+		Subquery: generateSelect(p, p.Scope),
+	}
+	return exp
 }
 
 func randomOperatorByType(t schema.SqlType) string {

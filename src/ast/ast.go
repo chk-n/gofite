@@ -116,7 +116,7 @@ type UpdateStmt struct {
 	LocalScope *Scope
 	Table      *schema.Table
 	SetClause  *SetClause
-	Where      *BoolExpr
+	Where      BoolExpr
 }
 
 func NewUpdateStmt(p *Prod, s *Scope, t schema.NamedRelation) *UpdateStmt {
@@ -182,7 +182,7 @@ type DeleteStmt struct {
 	*Prod
 	LocalScope *Scope
 	Table      *schema.Table
-	Where      *BoolExpr
+	Where      BoolExpr
 }
 
 // NOTE: these `modifying_stmt` are all the same. We should
@@ -227,7 +227,7 @@ type SelectStmt struct {
 	SetQuantifier string
 	SelectClause  *SelectClause
 	FromClause    *FromClause
-	WhereClause   *BoolExpr
+	WhereClause   BoolExpr
 	// TODO: add GROUP BY ... HAVING
 	// TODO: add ORDER BY
 	// TODO: add WINDOW
@@ -407,18 +407,73 @@ func (c *ConstExpr) Type() schema.SqlType {
 	return c.Typ
 }
 
-// boolExpr represents a boolean expression
-type BoolExpr struct {
+type BoolExpr interface {
+	Out() string
+	Type() schema.SqlType
+}
+
+type BinaryExpr struct {
 	Left  ValueExpr
 	Op    string
 	Right ValueExpr
 }
 
-func (b *BoolExpr) Out() string {
-	return fmt.Sprintf("%s %s %s", b.Left.Out(), b.Op, b.Right.Out())
+func (c *BinaryExpr) Out() string {
+	return fmt.Sprintf("%s %s %s", c.Left.Out(), c.Op, c.Right.Out())
 }
 
-func (b *BoolExpr) Type() schema.SqlType {
+func (c *BinaryExpr) Type() schema.SqlType {
+	return "BOOLEAN"
+}
+
+type ExistsExpr struct {
+	*Prod
+	Subquery *SelectStmt
+}
+
+func (e *ExistsExpr) Out() string {
+	var buf strings.Builder
+	buf.WriteString("EXISTS (")
+	buf.WriteString(e.Prod.Indent())
+	buf.WriteString(e.Subquery.Out() + ")")
+	return buf.String()
+}
+func (e *ExistsExpr) Type() schema.SqlType {
+	return "BOOLEAN"
+}
+
+type TruthExpr struct {
+	Value bool
+}
+
+func (e *TruthExpr) Out() string {
+	if e.Value {
+		return "true"
+	}
+	return "false"
+}
+
+func (e *TruthExpr) Type() schema.SqlType {
+	return "BOOLEAN"
+}
+
+type NullPredicateExpr struct {
+	Negate bool
+	Expr   ValueExpr
+}
+
+func (e *NullPredicateExpr) Out() string {
+	var buf strings.Builder
+	buf.WriteString(e.Expr.Out())
+	buf.WriteString(" IS ")
+	if e.Negate {
+		buf.WriteString("NOT ")
+	}
+	buf.WriteString("NULL")
+	return buf.String()
+}
+
+func (e *NullPredicateExpr) Type() schema.SqlType {
 	return "BOOLEAN"
 }
 
@@ -491,7 +546,7 @@ type ExpressionJoinCondition struct {
 	LocalScope *Scope
 	Lhs        TableRef
 	Rhs        TableRef
-	Where      *BoolExpr
+	Where      BoolExpr
 }
 
 func (c *ExpressionJoinCondition) joinCondition() {}
