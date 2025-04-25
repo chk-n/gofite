@@ -341,6 +341,33 @@ func (s *SelectClause) Out() string {
 	return buf.String()
 }
 
+type AliasedRelation struct {
+}
+
+type TableSubquery struct {
+	*Prod
+	IsLateral bool
+	Query     *SelectStmt
+	// Refs      []schema.NamedRelation
+}
+
+func (t *TableSubquery) Out() string {
+	var buf strings.Builder
+	if t.IsLateral {
+		buf.WriteString("LATERAL ")
+	}
+	buf.WriteString("(")
+	buf.WriteString(t.Query.Out())
+	buf.WriteString(") as ")
+	buf.WriteString(t.Scope.Refs[0].Name())
+	buf.WriteString(t.Indent())
+	return buf.String()
+}
+
+func (t *TableSubquery) References() []schema.NamedRelation {
+	return t.Scope.Refs
+}
+
 // ----------------- //
 // Value expressions //
 // ----------------- //

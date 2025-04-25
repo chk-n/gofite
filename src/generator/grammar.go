@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -143,7 +144,7 @@ func generateDelete(p *ast.Prod, s *ast.Scope) *ast.DeleteStmt {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L314
 func generateSelect(p *ast.Prod, s *ast.Scope) *ast.SelectStmt {
-	stmt := ast.NewSelectStmt(p, s, true)
+	stmt := ast.NewSelectStmt(p, s, false)
 
 	if d100() == 1 {
 		stmt.SetQuantifier = "distinct"
@@ -216,6 +217,7 @@ func generateJoinedTable(p *ast.Prod) *ast.JoinedTable {
 		Prod: ast.NewProd(p),
 	}
 
+retry:
 	tab.Lhs = generateTableRef(tab.Prod)
 	tab.Rhs = generateTableRef(tab.Prod)
 
@@ -250,7 +252,11 @@ func generateJoinedTable(p *ast.Prod) *ast.JoinedTable {
 	}
 	// natural join cant have ON clause
 	if hasOnClause {
-		tab.Condition = generateJoinCondition(tab.Prod, tab.Lhs, tab.Rhs)
+		cond, err := generateJoinCondition(tab.Prod, tab.Lhs, tab.Rhs)
+		if err != nil {
+			goto retry
+		}
+		tab.Condition = cond
 	}
 
 	// copy all lhs and rhs refs to current refs
@@ -269,7 +275,7 @@ func generateJoinedTable(p *ast.Prod) *ast.JoinedTable {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L96
-func generateJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCondition {
+func generateJoinCondition(p *ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
 	if d6() < 6 {
 		return generateExpressionJoinCondition(p, l, r)
 	}
@@ -277,21 +283,24 @@ func generateJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCondition {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L109
-func generateSimpleJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCondition {
+func generateSimpleJoinCondition(p *ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
 	p = ast.NewProd(p)
 	// assert at least one ref in lhs with columns not empty
 	assert(atLeastOneColumn(l.References()), "expected at least one column in refs")
 
+	cnt := 0
 retry:
+	if cnt > 10 {
+		return nil, errors.New("retried 10 times without finding join condition")
+	}
+	cnt++
+
 	lRef := randomPick(l.References())
 	if len(lRef.Columns()) == 0 {
 		goto retry
 	}
 	rRef := randomPick(r.References())
 	col1 := randomPick(lRef.Columns())
-
-	// assert at least one column with matching type
-	assert(colOfTypeExists(rRef.Columns(), col1.Typ), "expected at least one matching col")
 
 	condition := ""
 	for _, col2 := range rRef.Columns() {
@@ -308,11 +317,11 @@ retry:
 	return &ast.SimpleJoinCondition{
 		Prod:      p,
 		Condition: condition,
-	}
+	}, nil
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L138
-func generateExpressionJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCondition {
+func generateExpressionJoinCondition(p *ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
 	s := ast.NewScope(p.Scope)
 	p = ast.NewProd(p)
 	p.Scope = s
@@ -331,7 +340,29 @@ func generateExpressionJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCon
 		Lhs:        l,
 		Rhs:        r,
 		Where:      where,
+	}, nil
+
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L81
+func generateTableSubquery(p *ast.Prod, lateral bool) *ast.TableSubquery {
+	assert(!lateral, "sqlite 3.26 does not support lateral subqueries")
+
+	p = ast.NewProd(p)
+	p.Scope = ast.NewScope(p.Scope)
+	subq := &ast.TableSubquery{
+		Prod:      p,
+		IsLateral: lateral,
+		Query:     generateSelect(p, p.Scope),
 	}
+
+	alias := fmt.Sprintf("subq%d", subq.Scope.StmtSeq["subq"])
+	subq.Scope.StmtSeq["subq"]++
+	aliasedRel := subq.Query.SelectClause.DerivedColumns
+
+	subq.Scope.Refs = append(subq.Scope.Refs, &schema.AliasedRelation{Alias: alias, Cols: aliasedRel})
+
+	return subq
 }
 
 // ---------- //
@@ -341,9 +372,9 @@ func generateExpressionJoinCondition(p *ast.Prod, l, r ast.TableRef) ast.JoinCon
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L15
 func generateTableRef(p *ast.Prod) ast.TableRef {
 	if p.Level() < 3+d6() {
-		// if d6() > 3 && p.Level() < d6() {
-		//     return generateTableSubqeury(p)
-		// }
+		if d6() > 3 && p.Level() < d6() {
+			return generateTableSubquery(p, false)
+		}
 		if d6() > 3 {
 			return generateJoinedTable(p)
 		}
@@ -391,10 +422,7 @@ func generateColumnReference(p *ast.Prod, t schema.SqlType) ast.ValueExpr {
 	}
 	// find all columns that match t
 	pairs := p.Scope.RefsOfType(t)
-
-	if len(pairs) == 0 {
-		panic("no pairs found for type t")
-	}
+	assert(len(pairs) != 0, "expected at least one pair")
 
 	pick := randomPick(pairs)
 

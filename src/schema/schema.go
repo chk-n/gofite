@@ -85,6 +85,23 @@ func (t *Table) Name() string {
 	return t.name
 }
 
+type AliasedRelation struct {
+	Alias string
+	Cols  []Column
+}
+
+func (t *AliasedRelation) Out() string {
+	panic("dont use. required for interface")
+}
+
+func (t *AliasedRelation) Name() string {
+	return t.Alias
+}
+
+func (t *AliasedRelation) Columns() []Column {
+	return t.Cols
+}
+
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L37
 type Column struct {
 	Name string
