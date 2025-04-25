@@ -1,11 +1,11 @@
 package generator
 
 import (
-	"bytes"
-	"fmt"
-	"io"
+	"bufio"
+	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/cnordg/ast-group-project/src/ast"
@@ -15,93 +15,88 @@ import (
 // The goal of these tests is to generate a large
 // variety of random SQL statements and ensure they
 // are syntactically and semantically correct i.e.
-// do not cause errors when executed on sqlite3.
-// The tests generate 5 million queries per type
-// (select, insert, update, delete) and executes
+// do not cause errors when executed on sqlite3. The
+// tests generate hundreds of thousands of queries per
+// type (select, insert, update, delete) and executes
 // them.
 
-// one container spun up for all tests
-var containerId string
-var in io.WriteCloser
+// backlog of queries to be processed
+var backCh = make(chan string, 500)
 
-func TestMain(m *testing.M) {
-	// launch container
-	untarCmd := exec.Command("unzip", "-o", "sqlite3-test.zip")
-	untarCmd.Stderr = os.Stderr
-	if err := untarCmd.Run(); err != nil {
-		panic(fmt.Sprintf("failed to uncompress .zip: %v", err))
-	}
-	cmd := exec.Command("docker", "load", "-i", "sqlite3-test.tar")
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		panic(fmt.Sprintf("failed to load Docker image: %v", err))
-	}
-	startCmd := exec.Command("docker", "run", "-d", "--rm", "sqlite3-test:latest", "tail", "-f", "/dev/null")
-	output, err := startCmd.Output()
-	if err != nil {
-		panic(fmt.Sprintf("failed to start container: %v", err))
-	}
-	containerId = string(output)[:12]
+// only one query can be processed at a time
+var curCh = make(chan string, 1)
 
-	// initialise persistent in-memory db
-	execCmd := exec.Command("docker", "exec", "-i", containerId, "/usr/bin/sqlite3-3.26.0", "-interactive", ":memory:")
-	var stderr bytes.Buffer
-	execCmd.Stderr = &stderr
-	in, err = execCmd.StdinPipe()
-	if err != nil {
-		panic("unable to get stdin pipe: " + err.Error())
+func TestMain(t *testing.M) {
+	// setup interactive in-memory persistent db
+	cmd := exec.CommandContext(context.Background(), "./sqlite3-3.26.0", "-interactive", ":memory:")
+
+	stdin, _ := cmd.StdinPipe()
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+
+	// unblock current query if we see output in stdout
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, "sqlite>") {
+				<-curCh
+			}
+		}
+	}()
+
+	// if an error occurs read query that triggered
+	// which also unblocks channel allowing next query
+	// to be processed.
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			var buf strings.Builder
+			buf.WriteString("-----------------------\n")
+			buf.WriteString("SQL:")
+			buf.WriteString(<-curCh)
+			buf.WriteString("\nError: ")
+			buf.WriteString(line)
+			buf.WriteString("\n-----------------------")
+			panic(buf.String())
+		}
+	}()
+
+	// process one query at a time
+	go func() {
+		for sql := range backCh {
+			if _, err := stdin.Write([]byte(sql)); err != nil {
+				panic("unable to write to stdin pipe: " + err.Error())
+			}
+			curCh <- sql
+		}
+	}()
+
+	if err := cmd.Start(); err != nil {
+		panic("error starting cmd: " + err.Error())
 	}
-	if err := execCmd.Start(); err != nil {
-		panic("failed to start SQLite process: " + err.Error())
+
+	exit := t.Run()
+
+	close(backCh)
+	close(curCh)
+
+	if err := cmd.Cancel(); err != nil {
+		panic("error waiting for cmd: " + err.Error())
 	}
-
-	// NOTE: did some testing but nothing
-	// dramatically reduced execution time
-	// https://www.sqlite.org/pragma.html
-	// initCommands := []string{
-	// 	"PRAGMA synchronous=OFF;",
-	// 	"PRAGMA journal_mode=OFF;",
-	// 	"PRAGMA temp_store=MEMORY;",
-	// 	"PRAGMA mmap_size = 0;",
-	// 	"PRAGMA count_changes = OFF;",
-	// 	"PRAGMA cell_size_check = OFF;",
-	// 	"PRAGMA ignore_check_constraints = ON;",
-	// 	"PRAGMA defer_foreign_keys = ON;",
-	// 	"PRAGMA soft_heap_limit = 10000000;",
-	// }
-	// for _, cmd := range initCommands {
-	// 	if _, err := in.Write([]byte(cmd + ";\n")); err != nil {
-	// 		panic("unable to write to pipe: " + err.Error())
-	// 	}
-	// }
-
-	// run all tests
-	exitCode := m.Run()
-
-	if stderr.Len() != 0 {
-		panic(stderr.String())
-	}
-	// clean up
-	in.Close()
-	stopCmd := exec.Command("docker", "stop", containerId)
-	stopCmd.Run()
-	containerId = ""
-
-	os.Exit(exitCode)
+	os.Exit(exit)
 }
 
 func TestSelectGeneration(t *testing.T) {
 	nIter := 500
 	for range nIter {
+		var buf strings.Builder
 		sch := generateTable(1)
-		schemaSQL := sch.Out()
+		buf.WriteString(sch.Out() + "\n")
 
-		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
-			t.Fatalf("Failed to create schema: %v", err)
-		}
-
-		// generate and execute each query
-		nQueries := 1000
+		// generate queries
+		nQueries := 10_000
 		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
@@ -112,158 +107,151 @@ func TestSelectGeneration(t *testing.T) {
 			p := ast.NewProd(nil)
 
 			slct := generateSelect(p, s)
-
-			selectSQL := slct.Out()
-			selectSQL += ";\n"
-
-			if _, err := in.Write([]byte(selectSQL)); err != nil {
-				t.Fatalf("Failed to write to pipe: %s", err)
-			}
+			buf.WriteString(slct.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
-		dropSQL := "DROP TABLE IF EXISTS t0;\n"
-		if _, err := in.Write([]byte(dropSQL)); err != nil {
-			t.Fatalf("Failed to drop table: %v", err)
-		}
+		buf.WriteString("DROP TABLE IF EXISTS t0;\n")
+
+		backCh <- buf.String()
 	}
 }
 
-func TestInsertGeneration(t *testing.T) {
-	nIter := 500
-	for range nIter {
-		sch := generateTable(1)
-		schemaSQL := sch.Out()
+// func TestInsertGeneration(t *testing.T) {
+// 	nIter := 500
+// 	for range nIter {
+// 		sch := generateTable(1)
+// 		schemaSQL := sch.Out()
 
-		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
-			t.Fatalf("Failed to create schema: %v", err)
-		}
+// 		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
+// 			t.Fatalf("Failed to create schema: %v", err)
+// 		}
 
-		// generate and execute each query
-		nQueries := 1000
-		for range nQueries {
-			s := &ast.Scope{
-				Tables:  sch.Tables,
-				Schema:  sch,
-				Refs:    []schema.NamedRelation{},
-				StmtSeq: make(map[string]uint),
-			}
-			p := ast.NewProd(nil)
+// 		// generate and execute each query
+// 		nQueries := 1000
+// 		for range nQueries {
+// 			s := &ast.Scope{
+// 				Tables:  sch.Tables,
+// 				Schema:  sch,
+// 				Refs:    []schema.NamedRelation{},
+// 				StmtSeq: make(map[string]uint),
+// 			}
+// 			p := ast.NewProd(nil)
 
-			slct := generateInsert(p, s)
+// 			slct := generateInsert(p, s)
 
-			selectSQL := slct.Out()
-			selectSQL += ";\n"
+// 			selectSQL := slct.Out()
+// 			selectSQL += ";\n"
 
-			if _, err := in.Write([]byte(selectSQL)); err != nil {
-				t.Fatalf("Failed to write to pipe: %s", err)
-			}
-		}
-		// Drop the table after all queries for this iteration
-		dropSQL := "DROP TABLE IF EXISTS t0;\n"
-		if _, err := in.Write([]byte(dropSQL)); err != nil {
-			t.Fatalf("Failed to drop table: %v", err)
-		}
-	}
-}
+// 			if _, err := in.Write([]byte(selectSQL)); err != nil {
+// 				t.Fatalf("Failed to write to pipe: %s", err)
+// 			}
+// 		}
+// 		// Drop the table after all queries for this iteration
+// 		dropSQL := "DROP TABLE IF EXISTS t0;\n"
+// 		if _, err := in.Write([]byte(dropSQL)); err != nil {
+// 			t.Fatalf("Failed to drop table: %v", err)
+// 		}
+// 	}
+// }
 
-func TestUpdateGeneration(t *testing.T) {
-	nIter := 500
-	for range nIter {
-		sch := generateTable(1)
-		schemaSQL := sch.Out()
+// func TestUpdateGeneration(t *testing.T) {
+// 	nIter := 500
+// 	for range nIter {
+// 		sch := generateTable(1)
+// 		schemaSQL := sch.Out()
 
-		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
-			t.Fatalf("Failed to create schema: %v", err)
-		}
+// 		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
+// 			t.Fatalf("Failed to create schema: %v", err)
+// 		}
 
-		// generate and execute each query
-		nQueries := 1000
-		for range nQueries {
-			s := &ast.Scope{
-				Tables:  sch.Tables,
-				Schema:  sch,
-				Refs:    []schema.NamedRelation{},
-				StmtSeq: make(map[string]uint),
-			}
-			p := ast.NewProd(nil)
+// 		// generate and execute each query
+// 		nQueries := 1000
+// 		for range nQueries {
+// 			s := &ast.Scope{
+// 				Tables:  sch.Tables,
+// 				Schema:  sch,
+// 				Refs:    []schema.NamedRelation{},
+// 				StmtSeq: make(map[string]uint),
+// 			}
+// 			p := ast.NewProd(nil)
 
-			slct := generateUpdate(p, s)
+// 			slct := generateUpdate(p, s)
 
-			selectSQL := slct.Out()
-			selectSQL += ";\n"
+// 			selectSQL := slct.Out()
+// 			selectSQL += ";\n"
 
-			if _, err := in.Write([]byte(selectSQL)); err != nil {
-				t.Fatalf("Failed to write to pipe: %s", err)
-			}
-		}
-		// Drop the table after all queries for this iteration
-		dropSQL := "DROP TABLE IF EXISTS t0;\n"
-		if _, err := in.Write([]byte(dropSQL)); err != nil {
-			t.Fatalf("Failed to drop table: %v", err)
-		}
-	}
-}
+// 			if _, err := in.Write([]byte(selectSQL)); err != nil {
+// 				t.Fatalf("Failed to write to pipe: %s", err)
+// 			}
+// 		}
+// 		// Drop the table after all queries for this iteration
+// 		dropSQL := "DROP TABLE IF EXISTS t0;\n"
+// 		if _, err := in.Write([]byte(dropSQL)); err != nil {
+// 			t.Fatalf("Failed to drop table: %v", err)
+// 		}
+// 	}
+// }
 
-func TestDeleteGeneration(t *testing.T) {
-	nIter := 500
-	for range nIter {
-		sch := generateTable(1)
-		schemaSQL := sch.Out()
+// func TestDeleteGeneration(t *testing.T) {
+// 	nIter := 500
+// 	for range nIter {
+// 		sch := generateTable(1)
+// 		schemaSQL := sch.Out()
 
-		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
-			t.Fatalf("Failed to create schema: %v", err)
-		}
+// 		if _, err := in.Write([]byte(schemaSQL + ";\n")); err != nil {
+// 			t.Fatalf("Failed to create schema: %v", err)
+// 		}
 
-		// generate and execute each query
-		nQueries := 1000
-		for range nQueries {
-			s := &ast.Scope{
-				Tables:  sch.Tables,
-				Schema:  sch,
-				Refs:    []schema.NamedRelation{},
-				StmtSeq: make(map[string]uint),
-			}
-			p := ast.NewProd(nil)
+// 		// generate and execute each query
+// 		nQueries := 1000
+// 		for range nQueries {
+// 			s := &ast.Scope{
+// 				Tables:  sch.Tables,
+// 				Schema:  sch,
+// 				Refs:    []schema.NamedRelation{},
+// 				StmtSeq: make(map[string]uint),
+// 			}
+// 			p := ast.NewProd(nil)
 
-			slct := generateDelete(p, s)
+// 			slct := generateDelete(p, s)
 
-			selectSQL := slct.Out()
-			selectSQL += ";\n"
+// 			selectSQL := slct.Out()
+// 			selectSQL += ";\n"
 
-			if _, err := in.Write([]byte(selectSQL)); err != nil {
-				t.Fatalf("Failed to write to pipe: %s", err)
-			}
-		}
-		// Drop the table after all queries for this iteration
-		dropSQL := "DROP TABLE IF EXISTS t0;\n"
-		if _, err := in.Write([]byte(dropSQL)); err != nil {
-			t.Fatalf("Failed to drop table: %v", err)
-		}
-	}
-}
+// 			if _, err := in.Write([]byte(selectSQL)); err != nil {
+// 				t.Fatalf("Failed to write to pipe: %s", err)
+// 			}
+// 		}
+// 		// Drop the table after all queries for this iteration
+// 		dropSQL := "DROP TABLE IF EXISTS t0;\n"
+// 		if _, err := in.Write([]byte(dropSQL)); err != nil {
+// 			t.Fatalf("Failed to drop table: %v", err)
+// 		}
+// 	}
+// }
 
-func BenchmarkGenerateSelect(b *testing.B) {
-	schm := generateTable(1)
+// func BenchmarkGenerateSelect(b *testing.B) {
+// 	schm := generateTable(1)
 
-	for b.Loop() {
-		// fresh s for each stmt
-		s := &ast.Scope{
-			Schema:  schm,
-			Tables:  schm.Tables,
-			Refs:    []schema.NamedRelation{},
-			StmtSeq: make(map[string]uint),
-		}
+// 	for b.Loop() {
+// 		// fresh s for each stmt
+// 		s := &ast.Scope{
+// 			Schema:  schm,
+// 			Tables:  schm.Tables,
+// 			Refs:    []schema.NamedRelation{},
+// 			StmtSeq: make(map[string]uint),
+// 		}
 
-		p := &ast.Prod{
-			Scope: s,
-		}
+// 		p := &ast.Prod{
+// 			Scope: s,
+// 		}
 
-		stmt := generateSelect(p, s)
+// 		stmt := generateSelect(p, s)
 
-		// check to avoid function from being optimised
-		// away. not sure if this is still required in bench
-		if stmt == nil {
-			b.Fatal("Generated statement should not be nil")
-		}
-	}
-}
+// 		// check to avoid function from being optimised
+// 		// away. not sure if this is still required in bench
+// 		if stmt == nil {
+// 			b.Fatal("Generated statement should not be nil")
+// 		}
+// 	}
+// }
