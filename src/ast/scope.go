@@ -57,9 +57,9 @@ func (s *Scope) AvailableTypes() []schema.SqlType {
 	return types
 }
 
-func (s *Scope) RefsOfType(t schema.SqlType) []schema.RelationColumn {
+func RefsOfType(refs []schema.NamedRelation, t schema.SqlType) []schema.RelationColumn {
 	res := []schema.RelationColumn{}
-	for _, r := range s.Refs {
+	for _, r := range refs {
 		for _, c := range r.Columns() {
 			if c.Type() == t {
 				res = append(res, schema.RelationColumn{Rel: r, Col: c})

@@ -25,7 +25,7 @@ type Schema struct {
 	Tables    []NamedRelation
 	Operators []*Operator
 	// routines []routine
-	// aggregates []routine
+	Aggregates []*Routine
 }
 
 func (s *Schema) Out() string {
@@ -134,4 +134,41 @@ func (o *Operator) Ident() string {
 type RelationColumn struct {
 	Rel NamedRelation
 	Col Column
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L127
+type Routine struct {
+	Name     string
+	Schema   string
+	ArgTypes []SqlType
+	RetType  SqlType
+}
+
+func (r *Routine) Indent() string {
+	if r.Schema != "" {
+		return r.Schema + "." + r.Name
+	}
+	return r.Name
+}
+
+var BuiltInAggregates = []*Routine{
+	{Name: "avg", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "INTEGER"},
+	{Name: "avg", Schema: "", ArgTypes: []SqlType{"REAL"}, RetType: "REAL"},
+	{Name: "count", Schema: "", ArgTypes: []SqlType{"REAL"}, RetType: "INTEGER"},
+	{Name: "count", Schema: "", ArgTypes: []SqlType{"TEXT"}, RetType: "INTEGER"},
+	{Name: "count", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "INTEGER"},
+	{Name: "count", Schema: "", ArgTypes: []SqlType{}, RetType: "INTEGER"}, // count(*)
+	{Name: "group_concat", Schema: "", ArgTypes: []SqlType{"TEXT"}, RetType: "TEXT"},
+	{Name: "group_concat", Schema: "", ArgTypes: []SqlType{"TEXT", "TEXT"}, RetType: "TEXT"},
+	{Name: "string_agg", Schema: "", ArgTypes: []SqlType{"TEXT", "TEXT"}, RetType: "TEXT"},
+	{Name: "max", Schema: "", ArgTypes: []SqlType{"REAL"}, RetType: "REAL"},
+	{Name: "max", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "INTEGER"},
+	{Name: "max", Schema: "", ArgTypes: []SqlType{"TEXT"}, RetType: "TEXT"},
+	{Name: "min", Schema: "", ArgTypes: []SqlType{"REAL"}, RetType: "REAL"},
+	{Name: "min", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "INTEGER"},
+	{Name: "min", Schema: "", ArgTypes: []SqlType{"TEXT"}, RetType: "TEXT"},
+	{Name: "sum", Schema: "", ArgTypes: []SqlType{"REAL"}, RetType: "REAL"},
+	{Name: "sum", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "INTEGER"},
+	{Name: "total", Schema: "", ArgTypes: []SqlType{"REAL"}, RetType: "REAL"},
+	{Name: "total", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "REAL"},
 }

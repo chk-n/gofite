@@ -105,9 +105,8 @@ func TestSelectGeneration(t *testing.T) {
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
-			p := ast.NewProd(nil)
 
-			slct := GenerateSelect(p, s)
+			slct := GenerateSelect(nil, s)
 			buf.WriteString(slct.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
@@ -134,9 +133,8 @@ func TestInsertGeneration(t *testing.T) {
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
-			p := ast.NewProd(nil)
 
-			q := GenerateInsert(p, s)
+			q := GenerateInsert(nil, s)
 			buf.WriteString(q.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
@@ -163,9 +161,8 @@ func TestUpdateGeneration(t *testing.T) {
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
-			p := ast.NewProd(nil)
 
-			q := GenerateUpdate(p, s)
+			q := GenerateUpdate(nil, s)
 			buf.WriteString(q.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
@@ -192,9 +189,8 @@ func TestDeleteGeneration(t *testing.T) {
 				Refs:    []schema.NamedRelation{},
 				StmtSeq: make(map[string]uint),
 			}
-			p := ast.NewProd(nil)
 
-			q := GenerateDelete(p, s)
+			q := GenerateDelete(nil, s)
 			buf.WriteString(q.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
