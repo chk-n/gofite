@@ -21,7 +21,7 @@ import (
 // them.
 
 // backlog of queries to be processed
-var backCh = make(chan string, 2000)
+var backCh = make(chan string, 50_000)
 
 // only one query can be processed at a time
 var curCh = make(chan string, 1)
