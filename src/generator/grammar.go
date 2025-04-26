@@ -160,7 +160,7 @@ repeat1:
 	query := GenerateSelect(stmt, s)
 	stmt.WithQueries = append(stmt.WithQueries, query)
 
-	alias := fmt.Sprintf("%d", stmt.GetStmtUid("cte"))
+	alias := fmt.Sprintf("cte%d", stmt.GetStmtUid("cte"))
 	stmt.IncrStmtUid("cte")
 	aliasedRel := query.SelectClause.DerivedColumns
 	stmt.Refs = append(stmt.Refs, &schema.AliasedRelation{Alias: alias, Cols: aliasedRel})
