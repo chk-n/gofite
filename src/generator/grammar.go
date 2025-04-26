@@ -47,29 +47,29 @@ func generateTable(num int) *schema.Schema {
 	return schm
 }
 
-func generateStatement(s *ast.Scope) ast.Production {
+func GenerateStatement(s *ast.Scope) ast.Production {
 	// TODO: add remaining statements
 	//
 
 	if d42() == 1 {
-		return generateInsert(nil, s)
+		return GenerateInsert(nil, s)
 	} else if d42() == 1 {
-		return generateUpdate(nil, s)
+		return GenerateUpdate(nil, s)
 	} else if d42() == 1 {
-		return generateDelete(nil, s)
+		return GenerateDelete(nil, s)
 	} /*else if d42() == 1 {
 		return generateCommonTableExpression(p, s)
 	} else if d42() == 1 {
 		return generateUpsert(p, s)
 	}
 	*/
-	return generateSelect(nil, s)
+	return GenerateSelect(nil, s)
 }
 
-// generateInsert picks a random table and then generates
+// GenerateInsert picks a random table and then generates
 // values expressions for each column
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L374
-func generateInsert(p *ast.Prod, s *ast.Scope) *ast.InsertStmt {
+func GenerateInsert(p *ast.Prod, s *ast.Scope) *ast.InsertStmt {
 	victim := randomPick(s.Tables)
 	stmt := ast.NewInsertStmt(p, s, victim)
 
@@ -91,7 +91,7 @@ func generateInsert(p *ast.Prod, s *ast.Scope) *ast.InsertStmt {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L433
-func generateUpdate(p *ast.Prod, s *ast.Scope) *ast.UpdateStmt {
+func GenerateUpdate(p *ast.Prod, s *ast.Scope) *ast.UpdateStmt {
 	victim := randomPick(s.Tables)
 	stmt := ast.NewUpdateStmt(p, s, victim)
 
@@ -132,7 +132,7 @@ start:
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L362
-func generateDelete(p *ast.Prod, s *ast.Scope) *ast.DeleteStmt {
+func GenerateDelete(p *ast.Prod, s *ast.Scope) *ast.DeleteStmt {
 	victim := randomPick(s.Tables)
 	stmt := ast.NewDeleteStmt(p, s, victim)
 
@@ -143,7 +143,7 @@ func generateDelete(p *ast.Prod, s *ast.Scope) *ast.DeleteStmt {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L314
-func generateSelect(p *ast.Prod, s *ast.Scope) *ast.SelectStmt {
+func GenerateSelect(p *ast.Prod, s *ast.Scope) *ast.SelectStmt {
 	stmt := ast.NewSelectStmt(p, s, false)
 
 	if d100() == 1 {
@@ -353,7 +353,7 @@ func generateTableSubquery(p *ast.Prod, lateral bool) *ast.TableSubquery {
 	subq := &ast.TableSubquery{
 		Prod:      p,
 		IsLateral: lateral,
-		Query:     generateSelect(p, p.Scope),
+		Query:     GenerateSelect(p, p.Scope),
 	}
 
 	alias := fmt.Sprintf("subq%d", subq.Scope.StmtSeq["subq"])
@@ -583,7 +583,7 @@ func generateExistsExpression(p *ast.Prod) ast.BoolExpr {
 	p = ast.NewProd(p)
 	exp := &ast.ExistsExpr{
 		Prod:     p,
-		Subquery: generateSelect(p, p.Scope),
+		Subquery: GenerateSelect(p, p.Scope),
 	}
 	return exp
 }

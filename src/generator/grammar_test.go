@@ -107,7 +107,7 @@ func TestSelectGeneration(t *testing.T) {
 			}
 			p := ast.NewProd(nil)
 
-			slct := generateSelect(p, s)
+			slct := GenerateSelect(p, s)
 			buf.WriteString(slct.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
@@ -136,7 +136,7 @@ func TestInsertGeneration(t *testing.T) {
 			}
 			p := ast.NewProd(nil)
 
-			q := generateInsert(p, s)
+			q := GenerateInsert(p, s)
 			buf.WriteString(q.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
@@ -165,7 +165,7 @@ func TestUpdateGeneration(t *testing.T) {
 			}
 			p := ast.NewProd(nil)
 
-			q := generateUpdate(p, s)
+			q := GenerateUpdate(p, s)
 			buf.WriteString(q.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
@@ -194,7 +194,7 @@ func TestDeleteGeneration(t *testing.T) {
 			}
 			p := ast.NewProd(nil)
 
-			q := generateDelete(p, s)
+			q := GenerateDelete(p, s)
 			buf.WriteString(q.Out() + ";\n")
 		}
 		// Drop the table after all queries for this iteration
