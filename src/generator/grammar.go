@@ -264,9 +264,10 @@ retry:
 	tab.Lhs = generateTableRef(tab)
 	tab.Rhs = generateTableRef(tab)
 
+	typ := ""
 	hasOnClause := true
 	if d20() == 1 {
-		tab.Type = "CROSS"
+		typ = "CROSS"
 	} else {
 		// BUG: i have commented this out
 		// as the queries are not properly
@@ -278,10 +279,10 @@ retry:
 		// }
 		isInner := false
 		if d6() < 4 {
-			tab.Type += "INNER"
+			typ += "INNER"
 			isInner = true
 		} else /*if d6() < 4*/ {
-			tab.Type += "LEFT"
+			typ += "LEFT"
 			// NOTE: FULL not supported in 3.26
 			// } else if d6() == 1 {
 			// tab.Type += "FULL"
@@ -290,9 +291,10 @@ retry:
 			// tab.Type += "RIGHT"
 		}
 		if !isInner && d6() == 1 {
-			tab.Type += " OUTER"
+			typ += " OUTER"
 		}
 	}
+	tab.Type = typ
 	// natural join cant have ON clause
 	if hasOnClause {
 		cond, err := generateJoinCondition(tab, tab.Lhs, tab.Rhs)
