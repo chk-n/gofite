@@ -60,10 +60,10 @@ func GenerateStatement(s *ast.Scope) ast.Prod {
 		return GenerateUpdate(nil, s)
 	} else if d42() == 1 {
 		return GenerateDelete(nil, s)
-	} /*else if d42() == 1 {
-		return generateCommonTableExpression(p, s)
 	} else if d42() == 1 {
-		return generateUpsert(p, s)
+		return GenerateCTE(nil, s)
+	} /*else if d42() == 1 {
+		return generateUpsert(nil, s)
 	}
 	*/
 	return GenerateSelect(nil, s)
@@ -147,6 +147,39 @@ func GenerateDelete(p ast.Prod, s *ast.Scope) *ast.DeleteStmt {
 
 	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
 	stmt.Where = generateBoolExpression(stmt)
+
+	return stmt
+}
+
+// https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L498
+func GenerateCTE(p ast.Prod, s *ast.Scope) *ast.CTEStmt {
+	stmt := ast.NewCTEStmt(p, s)
+
+	// create at least one SELECT within CTE
+repeat1:
+	query := GenerateSelect(stmt, s)
+	stmt.WithQueries = append(stmt.WithQueries, query)
+
+	alias := fmt.Sprintf("%d", stmt.GetStmtUid("cte"))
+	stmt.IncrStmtUid("cte")
+	aliasedRel := query.SelectClause.DerivedColumns
+	stmt.Refs = append(stmt.Refs, &schema.AliasedRelation{Alias: alias, Cols: aliasedRel})
+
+	if d6() > 2 {
+		goto repeat1
+	}
+
+	// add random tables from original scope
+repeat2:
+	tab := randomPick(s.Tables)
+	stmt.Scope.Tables = append(stmt.Scope.Tables, tab)
+
+	if d6() > 3 {
+		goto repeat2
+	}
+
+	// generate main SQL statement
+	stmt.Query = GenerateSelect(stmt, stmt.Scope)
 
 	return stmt
 }

@@ -116,7 +116,7 @@ func TestSelectGeneration(t *testing.T) {
 	}
 }
 
-func TestInsertGeneration(t *testing.T) {
+func TestCTEGeneration(t *testing.T) {
 	t.Parallel()
 	nIter := 500
 	for range nIter {
@@ -125,7 +125,35 @@ func TestInsertGeneration(t *testing.T) {
 		buf.WriteString(sch.Out() + "\n")
 
 		// generate queries
-		nQueries := 10_000
+		nQueries := 1000
+		for range nQueries {
+			s := &ast.Scope{
+				Tables:  sch.Tables,
+				Schema:  sch,
+				Refs:    []schema.NamedRelation{},
+				StmtSeq: make(map[string]uint),
+			}
+
+			cte := GenerateCTE(nil, s)
+			buf.WriteString(cte.Out() + ";\n")
+		}
+		// Drop the table after all queries for this iteration
+		buf.WriteString("DROP TABLE IF EXISTS t0;\n")
+
+		backCh <- buf.String()
+	}
+}
+
+func TestInsertGeneration(t *testing.T) {
+	t.Parallel()
+	nIter := 50_000
+	for range nIter {
+		var buf strings.Builder
+		sch := generateTable(1)
+		buf.WriteString(sch.Out() + "\n")
+
+		// generate queries
+		nQueries := 100
 		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
