@@ -500,6 +500,14 @@ type ConstExpr struct {
 	Typ   schema.SqlType
 }
 
+func NewConstant(p Prod, c string, t schema.SqlType) *ConstExpr {
+	return &ConstExpr{
+		Base:  p.GetBase(),
+		Value: c,
+		Typ:   t,
+	}
+}
+
 func (c *ConstExpr) Out() string {
 	return c.Value
 }

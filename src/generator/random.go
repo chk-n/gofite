@@ -1,6 +1,8 @@
 package generator
 
-import "math/rand"
+import (
+	"math/rand"
+)
 
 func d6() int {
 	return rand.Intn(6) + 1
@@ -31,4 +33,9 @@ func randomPick[T any](items []T) T {
 		panic("No items to pick from")
 	}
 	return items[rand.Intn(len(items))]
+}
+
+// number ranges [0, t]
+func randomInt(t int) int {
+	return rand.Intn(t + 1)
 }

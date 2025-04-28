@@ -44,8 +44,9 @@ func generateTable(num int) *schema.Schema {
 
 		schm.Tables = append(schm.Tables, tab)
 	}
-	// register aggregates
+	// register aggregates and functions
 	schm.Aggregates = schema.BuiltInAggregates
+	schm.Routines = schema.BuiltInFunctions
 
 	return schm
 }
@@ -485,11 +486,13 @@ func generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L17
 func generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
+	// TODO: add case expressions
+	// TODO: add coalesce
+	// TODO: add nullif
 	if d20() == 1 && p.Level() < d6() && isWindowFunctionAllowed(p) {
-		return generateAggregateCallExpression(p, t)
-		// else if p.Level() < d6() && d6() == 1 {
-		// NOTE: currently only aggregate fns supported
-		// return generateFunctionCallExpression(p, t, false)
+		return generateWindowFunction(p, t)
+	} else if p.Level() < d6() && d6() == 1 {
+		return generateFunctionCallExpression(p, t, false)
 	} else if len(p.References()) > 0 && d20() > 1 {
 		return generateColumnReference(p, t)
 	}
@@ -667,12 +670,14 @@ func randomOperatorByType(t schema.SqlType) string {
 // --------- //
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L359
-func generateWindowFunction(p ast.Prod, constraint schema.SqlType) *ast.WindowFunExpr {
+func generateWindowFunction(p ast.Prod, constraint schema.SqlType) (*ast.WindowFunExpr, error) {
 	expr := &ast.WindowFunExpr{
 		Base: ast.NewBase(p.GetBase()),
 	}
 	agg, err := generateAggregateCallExpression(p, constraint)
-	assert(err == nil, "expected no error")
+	if err != nil {
+		return nil, err
+	}
 
 	expr.Aggregate = agg
 	expr.Typ = agg.Typ
@@ -693,7 +698,7 @@ func generateWindowFunction(p ast.Prod, constraint schema.SqlType) *ast.WindowFu
 		expr.OrderBy = append(expr.OrderBy, ob)
 	}
 
-	return expr
+	return expr, nil
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L374C1-L383C2
@@ -715,11 +720,24 @@ func isWindowFunctionAllowed(p ast.Prod) bool {
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L210
 func generateFunctionCallExpression(p ast.Prod, constraint schema.SqlType, aggregate bool) (*ast.FunCallExpr, error) {
 	if aggregate {
-		return retry(func() (*ast.FunCallExpr, error) {
-			return generateAggregateCallExpression(p, constraint)
-		})
+		return generateAggregateCallExpression(p, constraint)
 	}
-	panic("non aggregate functions currently not supported")
+
+	// pick a random built in function e.g. core,
+	// math or datetime
+	proc := randomPick(schema.BuiltInFunctions)
+	args := generateFunctionArguments(p, proc.ArgTypes)
+	if constraint != "" && proc.RetType != constraint {
+		return nil, errors.New("no matching constraint found")
+	}
+
+	return &ast.FunCallExpr{
+		Base:   p.GetBase(),
+		Proc:   proc,
+		Params: args,
+		Typ:    proc.RetType,
+	}, nil
+
 }
 
 func generateAggregateCallExpression(p ast.Prod, constraint schema.SqlType) (*ast.FunCallExpr, error) {
@@ -756,6 +774,208 @@ func generateAggregateCallExpression(p ast.Prod, constraint schema.SqlType) (*as
 		expr.SetQuantifier = "DISTINCT"
 	}
 	return expr, nil
+}
+
+func generateFunctionArguments(p ast.Prod, argTypes []schema.SqlType) []ast.ValueExpr {
+	var vals []ast.ValueExpr
+	var tValue string
+
+	i := len(argTypes)
+	// j can be at most len(argTypes) - 1
+	j := 0
+	for range i {
+		at := argTypes[j]
+		switch at {
+		case "MULTI":
+			// generate random number of additional
+			// arguments
+			i += rand.Intn(100)
+		case "TIMEVALUE":
+			val, tVal := generateDatetimeValue()
+			tValue = tVal
+			vals = append(vals, ast.NewConstant(p, val, "TEXT"))
+		case "TIMEMODIFIER":
+			// as timevalues always precede modifiers
+			// we just get last time value
+			assert(tValue != "", "expected tValue to be set")
+			mod := generateDatetimeModifier(tValue)
+			vals = append(vals, ast.NewConstant(p, mod, "TEXT"))
+		case "RUNE":
+			vals = append(vals, generateUnicode(p))
+		case "ANY":
+			vals = append(vals, generateConstantExpression(p, ""))
+		case "REAL01":
+			// altjhough 1.0 not included this should
+			// be fine
+			r := fmt.Sprintf("%f", rand.Float32())
+			vals = append(vals, ast.NewConstant(p, r, "REAL"))
+		default:
+			vals = append(vals, generateConstantExpression(p, at))
+		}
+		if j < len(argTypes) {
+			j++
+		}
+	}
+
+	assert(len(vals) <= len(argTypes), "expected vals to be <= argTypes")
+
+	return vals
+}
+
+// https://sqlite.org/lang_datefunc.html
+func generateDatetimeValue() (string, string) {
+	i := rand.Intn(12)
+	tv := schema.DatetimeTimeValues[i]
+	switch i + 1 {
+	case 1:
+		y := randomInt(9999)
+		m := randomInt(12)
+		d := generateDay(m)
+		return fmt.Sprintf(tv, y, m, d), tv
+	case 2, 5:
+		y := randomInt(9999)
+		mn := randomInt(12)
+		d := generateDay(mn)
+		h := randomInt(24)
+		m := randomInt(59)
+		return fmt.Sprintf(tv, y, mn, d, h, m), tv
+	case 3, 6:
+		y := randomInt(9999)
+		mn := randomInt(12)
+		d := generateDay(mn)
+		h := randomInt(24)
+		m := randomInt(59)
+		s := randomInt(59)
+		return fmt.Sprintf(tv, y, mn, d, h, m, s), tv
+	case 4, 7:
+		y := randomInt(9999)
+		mn := randomInt(12)
+		d := generateDay(mn)
+		h := randomInt(24)
+		m := randomInt(59)
+		s := randomInt(59)
+		ms := randomInt(999)
+		return fmt.Sprintf(tv, y, mn, d, h, m, s, ms), tv
+	case 8:
+		h := randomInt(24)
+		m := randomInt(59)
+		return fmt.Sprintf(tv, h, m), tv
+	case 9:
+		h := randomInt(24)
+		m := randomInt(59)
+		s := randomInt(59)
+		return fmt.Sprintf(tv, h, m, s), tv
+	case 10:
+		h := randomInt(24)
+		m := randomInt(59)
+		s := randomInt(59)
+		ms := randomInt(999)
+		return fmt.Sprintf(tv, h, m, s, ms), tv
+	case 11:
+		return tv, tv
+	case 12:
+		return fmt.Sprintf("'%d'", randomInt(99999999999)), tv
+	default:
+		panic("unreachable")
+	}
+}
+
+func generateDatetimeModifier(timeValue string) string {
+	i := rand.Intn(25)
+	// only julianday, unixepoch, auto
+	// and localtime supported with that
+	// time value
+	if timeValue == "DDDDDDDDD" {
+		i = rand.Intn(4) + 20
+	}
+	mod := schema.DatetimeModifiers[i]
+	switch i + 1 {
+	case 1, 2, 3, 4, 5, 6, 19:
+		return fmt.Sprintf(mod, rand.Int())
+	case 7:
+		h := randomInt(24)
+		m := randomInt(59)
+		return fmt.Sprintf(mod, h, m)
+	case 8:
+		h := randomInt(24)
+		m := randomInt(59)
+		s := randomInt(59)
+		return fmt.Sprintf(mod, h, m, s)
+	case 9:
+		h := randomInt(24)
+		m := randomInt(59)
+		s := randomInt(59)
+		ms := randomInt(999)
+		return fmt.Sprintf(mod, h, m, s, ms)
+	case 10:
+		y := randomInt(9999)
+		m := randomInt(12)
+		d := generateDay(m)
+		return fmt.Sprintf(mod, y, m, d)
+	case 11:
+		y := randomInt(9999)
+		mn := randomInt(12)
+		d := generateDay(mn)
+		h := randomInt(24)
+		m := randomInt(59)
+		return fmt.Sprintf(mod, y, mn, d, h, m)
+	case 12:
+		y := randomInt(9999)
+		mn := randomInt(12)
+		d := generateDay(mn)
+		h := randomInt(24)
+		m := randomInt(59)
+		s := randomInt(59)
+		return fmt.Sprintf(mod, y, mn, d, h, m, s)
+	case 13:
+		y := randomInt(9999)
+		mn := randomInt(12)
+		d := generateDay(mn)
+		h := randomInt(24)
+		m := randomInt(59)
+		s := randomInt(59)
+		ms := randomInt(999)
+		return fmt.Sprintf(mod, y, mn, d, h, m, s, ms)
+	case 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25:
+		return schema.DatetimeModifiers[i]
+	default:
+		panic("unreachable")
+	}
+}
+
+func generateDay(month int) int {
+	var d int
+	// NOTE: we will getinvalid days
+	// if 'y' is a leap year
+	if month == 7 {
+		d = randomInt(28)
+	}
+	if month <= 7 {
+		if month%2 == 0 {
+			d = randomInt(30)
+		} else {
+			d = randomInt(31)
+		}
+	} else {
+		if month%2 == 0 {
+			d = randomInt(31)
+		} else {
+			d = randomInt(30)
+		}
+	}
+	return d
+}
+
+func generateUnicode(p ast.Prod) ast.ValueExpr {
+	for {
+		cp := rune(rand.Intn(0x10FFFF + 1))
+
+		// check if surrogate
+		if cp >= 0xD800 && cp <= 0xDFFF {
+			continue
+		}
+		return ast.NewConstant(p, "'"+string(cp)+"'", "TEXT")
+	}
 }
 
 // ------ //
