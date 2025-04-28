@@ -26,7 +26,7 @@ func TestSelectGeneration(t *testing.T) {
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
-		nQueries := 500
+		nQueries := 5000
 		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
@@ -41,12 +41,11 @@ func TestSelectGeneration(t *testing.T) {
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
-				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
-					buf.String(), schemaSql, query)
+				t.Fatalf("Query failed: %s\n%s",
+					buf.String(), query)
 			}
 		}
 	}
-
 }
 
 func TestCTEGeneration(t *testing.T) {
@@ -82,8 +81,8 @@ func TestCTEGeneration(t *testing.T) {
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
-				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
-					buf.String(), schemaSql, query)
+				t.Fatalf("Query failed: %s\n%s",
+					buf.String(), query)
 			}
 		}
 	}
@@ -112,8 +111,8 @@ func TestInsertGeneration(t *testing.T) {
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
-				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
-					buf.String(), schemaSql, query)
+				t.Fatalf("Query failed: %s\n%s",
+					buf.String(), query)
 			}
 		}
 	}
@@ -143,8 +142,8 @@ func TestUpdateGeneration(t *testing.T) {
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
-				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
-					buf.String(), schemaSql, query)
+				t.Fatalf("Query failed: %s\n%s",
+					buf.String(), query)
 			}
 		}
 	}
@@ -173,8 +172,13 @@ func TestDeleteGeneration(t *testing.T) {
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
-				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
-					buf.String(), schemaSql, query)
+				t.Fatalf("Query failed: %s\n%s",
+					buf.String(), query)
+			}
+		}
+	}
+}
+
 func TestExplainGeneration(t *testing.T) {
 	t.Parallel()
 
