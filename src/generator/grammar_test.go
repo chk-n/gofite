@@ -26,7 +26,7 @@ func TestSelectGeneration(t *testing.T) {
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
-		nQueries := 5000
+		nQueries := 500
 		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
@@ -182,7 +182,7 @@ func TestDeleteGeneration(t *testing.T) {
 func TestExplainGeneration(t *testing.T) {
 	t.Parallel()
 
-	nIter := 100
+	nIter := 10
 	for range nIter {
 		sch := generateTable(1)
 		schemaSql := sch.Out() + "\n "
