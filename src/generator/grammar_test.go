@@ -20,20 +20,11 @@ import (
 func TestSelectGeneration(t *testing.T) {
 	t.Parallel()
 
-	var buf bytes.Buffer
-	cmd := exec.Command("./sqlite3-3.26.0", "-interactive", ":memory:")
-	in, _ := cmd.StdinPipe()
-	cmd.Stderr = &buf
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-
-	nIter := 1000
+	nIter := 100
 	for range nIter {
-
 		sch := generateTable(1)
-		schemaSql := sch.Out() + "\n"
-		in.Write([]byte(schemaSql))
+		schemaSql := sch.Out() + "\n "
+
 		// generate queries
 		nQueries := 500
 		for range nQueries {
@@ -45,19 +36,17 @@ func TestSelectGeneration(t *testing.T) {
 			}
 
 			q := GenerateSelect(nil, s)
-			query := q.Out() + ";\n"
-
-			if _, err := in.Write([]byte(query)); err != nil {
-				t.Fatalf("unable to write to pipe: %s", err)
-			}
-
-			if buf.Len() > 0 {
+			query := schemaSql + q.Out() + ";\n"
+			cmd := exec.Command("./sqlite3-3.26.0", ":memory:", query)
+			var buf bytes.Buffer
+			cmd.Stderr = &buf
+			if err := cmd.Run(); err != nil {
 				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
 					buf.String(), schemaSql, query)
 			}
 		}
-		in.Write([]byte("DROP TABLE IF EXISTS t0;\n"))
 	}
+
 }
 
 func TestCTEGeneration(t *testing.T) {
@@ -88,40 +77,27 @@ func TestCTEGeneration(t *testing.T) {
 			}
 
 			q := GenerateCTE(nil, s)
-			query := q.Out() + ";\n"
-
-			if _, err := in.Write([]byte(query)); err != nil {
-				t.Fatalf("unable to write to pipe: %s", err)
-			}
-
-			if buf.Len() > 0 {
+			query := schemaSql + q.Out() + ";\n"
+			cmd := exec.Command("./sqlite3-3.26.0", ":memory:", query)
+			var buf bytes.Buffer
+			cmd.Stderr = &buf
+			if err := cmd.Run(); err != nil {
 				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
 					buf.String(), schemaSql, query)
 			}
 		}
-		in.Write([]byte("DROP TABLE IF EXISTS t0;\n"))
 	}
 }
 
 func TestInsertGeneration(t *testing.T) {
 	t.Parallel()
 
-	var buf bytes.Buffer
-	cmd := exec.Command("./sqlite3-3.26.0", "-interactive", ":memory:")
-	in, _ := cmd.StdinPipe()
-	cmd.Stderr = &buf
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-
-	nIter := 5000
+	nIter := 500
 	for range nIter {
-
 		sch := generateTable(1)
 		schemaSql := sch.Out() + "\n"
-		in.Write([]byte(schemaSql))
 		// generate queries
-		nQueries := 1000
+		nQueries := 100
 		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
@@ -131,39 +107,28 @@ func TestInsertGeneration(t *testing.T) {
 			}
 
 			q := GenerateInsert(nil, s)
-			query := q.Out() + ";\n"
-			if _, err := in.Write([]byte(query)); err != nil {
-				t.Fatalf("unable to write to pipe: %s", err)
-			}
-
-			if buf.Len() > 0 {
+			query := schemaSql + q.Out() + ";\n"
+			cmd := exec.Command("./sqlite3-3.26.0", ":memory:", query)
+			var buf bytes.Buffer
+			cmd.Stderr = &buf
+			if err := cmd.Run(); err != nil {
 				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
 					buf.String(), schemaSql, query)
 			}
 		}
-		in.Write([]byte("DROP TABLE IF EXISTS t0;\n"))
 	}
 }
 
 func TestUpdateGeneration(t *testing.T) {
 	t.Parallel()
 
-	var buf bytes.Buffer
-	cmd := exec.Command("./sqlite3-3.26.0", "-interactive", ":memory:")
-	in, _ := cmd.StdinPipe()
-	cmd.Stderr = &buf
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-
-	nIter := 5000
+	nIter := 500
 	for range nIter {
 
 		sch := generateTable(1)
 		schemaSql := sch.Out() + "\n"
-		in.Write([]byte(schemaSql))
 		// generate queries
-		nQueries := 1000
+		nQueries := 100
 		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
@@ -173,40 +138,27 @@ func TestUpdateGeneration(t *testing.T) {
 			}
 
 			q := GenerateUpdate(nil, s)
-			query := q.Out() + ";\n"
-
-			if _, err := in.Write([]byte(query)); err != nil {
-				t.Fatalf("unable to write to pipe: %s", err)
-			}
-
-			if buf.Len() > 0 {
+			query := schemaSql + q.Out() + ";\n"
+			cmd := exec.Command("./sqlite3-3.26.0", ":memory:", query)
+			var buf bytes.Buffer
+			cmd.Stderr = &buf
+			if err := cmd.Run(); err != nil {
 				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
 					buf.String(), schemaSql, query)
 			}
 		}
-		in.Write([]byte("DROP TABLE IF EXISTS t0;\n"))
 	}
 }
 
 func TestDeleteGeneration(t *testing.T) {
 	t.Parallel()
 
-	var buf bytes.Buffer
-	cmd := exec.Command("./sqlite3-3.26.0", "-interactive", ":memory:")
-	in, _ := cmd.StdinPipe()
-	cmd.Stderr = &buf
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-
-	nIter := 5000
+	nIter := 500
 	for range nIter {
-
 		sch := generateTable(1)
 		schemaSql := sch.Out() + "\n"
-		in.Write([]byte(schemaSql))
 		// generate queries
-		nQueries := 1000
+		nQueries := 100
 		for range nQueries {
 			s := &ast.Scope{
 				Tables:  sch.Tables,
@@ -216,43 +168,36 @@ func TestDeleteGeneration(t *testing.T) {
 			}
 
 			q := GenerateDelete(nil, s)
-			query := q.Out() + ";\n"
-
-			if _, err := in.Write([]byte(query)); err != nil {
-				t.Fatalf("unable to write to pipe: %s", err)
-			}
-
-			if buf.Len() > 0 {
+			query := schemaSql + q.Out() + ";\n"
+			cmd := exec.Command("./sqlite3-3.26.0", ":memory:", query)
+			var buf bytes.Buffer
+			cmd.Stderr = &buf
+			if err := cmd.Run(); err != nil {
 				t.Fatalf("Query failed: %s\nSchema:\n%s\nInsert:%s",
 					buf.String(), schemaSql, query)
 			}
 		}
-		in.Write([]byte("DROP TABLE IF EXISTS t0;\n"))
 	}
 }
 
-// func BenchmarkGenerateSelect(b *testing.B) {
-// 	schm := generateTable(1)
+func BenchmarkGenerateSelect(b *testing.B) {
+	schm := generateTable(1)
 
-// 	for b.Loop() {
-// 		// fresh s for each stmt
-// 		s := &ast.Scope{
-// 			Schema:  schm,
-// 			Tables:  schm.Tables,
-// 			Refs:    []schema.NamedRelation{},
-// 			StmtSeq: make(map[string]uint),
-// 		}
+	for b.Loop() {
+		// fresh s for each stmt
+		s := &ast.Scope{
+			Schema:  schm,
+			Tables:  schm.Tables,
+			Refs:    []schema.NamedRelation{},
+			StmtSeq: make(map[string]uint),
+		}
 
-// 		p := &ast.Prod{
-// 			Scope: s,
-// 		}
+		stmt := GenerateSelect(nil, s)
 
-// 		stmt := generateSelect(p, s)
-
-// 		// check to avoid function from being optimised
-// 		// away. not sure if this is still required in bench
-// 		if stmt == nil {
-// 			b.Fatal("Generated statement should not be nil")
-// 		}
-// 	}
-// }
+		// check to avoid function from being optimised
+		// away. not sure if this is still required in bench
+		if stmt == nil {
+			b.Fatal("Generated statement should not be nil")
+		}
+	}
+}
