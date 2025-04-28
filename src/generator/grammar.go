@@ -65,6 +65,8 @@ func GenerateStatement(s *ast.Scope) ast.Prod {
 		return GenerateCTE(nil, s)
 	} else if d1000() == 1 {
 		return GenerateAnalyse(nil, s)
+	} else if d1000()+d1000() == 1 {
+		return GenerateVacuum(nil, s)
 	}
 	/*else if d42() == 1 {
 		return generateUpsert(nil, s)
@@ -93,6 +95,28 @@ func GenerateAnalyse(p ast.Prod, s *ast.Scope) *ast.AnalyseStmt {
 	} else {
 		t := randomPick(s.Tables)
 		stmt.Name = t.Name()
+	}
+
+	return stmt
+}
+
+func GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
+	stmt := ast.NewVacuumStmt(p)
+
+	if d100() == 1 {
+		var err error
+		stmt.File += "''"
+		stmt.File, err = os.MkdirTemp("", "sqlite3-")
+		if err != nil {
+			panic(err)
+		}
+		stmt.File += fmt.Sprintf("%d'", time.Now().UnixMilli())
+	}
+
+	if s.Schema.Name != "" {
+		stmt.Name = s.Schema.Name
+	} else {
+		stmt.Name = "main"
 	}
 
 	return stmt

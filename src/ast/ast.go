@@ -440,7 +440,6 @@ func (s *SelectClause) Out() string {
 	return buf.String()
 }
 
-type AliasedRelation struct {
 type ExplainStmt struct {
 	*Base
 	QueryPlan bool
@@ -486,6 +485,30 @@ func NewAnalyseStmt(p Prod) *AnalyseStmt {
 
 func (s *AnalyseStmt) Out() string {
 	return "ANALYZE " + s.Name
+}
+
+type VacuumStmt struct {
+	*Base
+	Name string
+	File string
+}
+
+func NewVacuumStmt(p Prod) *VacuumStmt {
+	var b *Base
+	if p != nil {
+		b = p.GetBase()
+	}
+	return &VacuumStmt{
+		Base: b,
+	}
+}
+
+func (s *VacuumStmt) Out() string {
+	if s.File == "" {
+		return "VACUUM " + s.Name
+	}
+	return "VACUUM " + s.Name +
+		" INTO " + s.File
 }
 
 type TableSubquery struct {
