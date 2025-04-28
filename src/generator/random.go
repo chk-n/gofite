@@ -28,6 +28,10 @@ func d100() int {
 	return rand.Intn(100) + 1
 }
 
+func d1000() int {
+	return rand.Intn(1000) + 1
+}
+
 func randomPick[T any](items []T) T {
 	if len(items) == 0 {
 		panic("No items to pick from")

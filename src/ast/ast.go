@@ -467,6 +467,27 @@ func (s *ExplainStmt) Out() string {
 	return buf.String()
 }
 
+type AnalyseStmt struct {
+	*Base
+	// schema, table_name or
+	// schema.table_name
+	Name string
+}
+
+func NewAnalyseStmt(p Prod) *AnalyseStmt {
+	var b *Base
+	if p != nil {
+		b = p.GetBase()
+	}
+	return &AnalyseStmt{
+		Base: b,
+	}
+}
+
+func (s *AnalyseStmt) Out() string {
+	return "ANALYZE " + s.Name
+}
+
 type TableSubquery struct {
 	*Base
 	IsLateral bool

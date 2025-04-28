@@ -63,7 +63,10 @@ func GenerateStatement(s *ast.Scope) ast.Prod {
 		return GenerateDelete(nil, s)
 	} else if d42() == 1 {
 		return GenerateCTE(nil, s)
-	} /*else if d42() == 1 {
+	} else if d1000() == 1 {
+		return GenerateAnalyse(nil, s)
+	}
+	/*else if d42() == 1 {
 		return generateUpsert(nil, s)
 	}
 	*/
@@ -78,6 +81,21 @@ func GenerateExplain(p ast.Prod, s *ast.Scope) *ast.ExplainStmt {
 	expl.Stmt = GenerateStatement(s)
 
 	return expl
+}
+
+func GenerateAnalyse(p ast.Prod, s *ast.Scope) *ast.AnalyseStmt {
+	stmt := ast.NewAnalyseStmt(p)
+	if s.Schema.Name != "" && d6() < 3 {
+		stmt.Name = s.Schema.Name
+	} else if s.Schema.Name != "" {
+		t := randomPick(s.Tables)
+		stmt.Name = s.Schema.Name + "." + t.Name()
+	} else {
+		t := randomPick(s.Tables)
+		stmt.Name = t.Name()
+	}
+
+	return stmt
 }
 
 // GenerateInsert picks a random table and then generates
