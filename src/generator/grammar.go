@@ -117,14 +117,11 @@ func GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
 	stmt := ast.NewVacuumStmt(p)
 
 	if d100() == 1 {
-		var err error
-		stmt.File += "'"
-		stmt.File, err = os.MkdirTemp("", "sqlite3-")
+		dir, err := os.MkdirTemp("", "sqlite3-")
 		if err != nil {
 			panic(err)
 		}
-		stmt.File += fmt.Sprintf("%d", time.Now().UnixMilli())
-		stmt.File += "'"
+		stmt.File += fmt.Sprintf("'%s/%d'", dir, time.Now().UnixMilli())
 	}
 
 	if s.Schema.Name != "" {
