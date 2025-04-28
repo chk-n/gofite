@@ -607,23 +607,35 @@ func generateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 			value = "FALSE"
 		}
 	case "DATE":
-		year := 2000 + rand.Intn(23)
-		month := 1 + rand.Intn(12)
-		day := 1 + rand.Intn(28)
-		value = fmt.Sprintf("'%04d-%02d-%02d'", year, month, day)
+		if d6() < 6 {
+			year := 2000 + rand.Intn(23)
+			month := 1 + rand.Intn(12)
+			day := 1 + rand.Intn(28)
+			value = fmt.Sprintf("'%04d-%02d-%02d'", year, month, day)
+		} else {
+			value = "CURRENT_DATE"
+		}
 	case "TIME":
-		hour := rand.Intn(24)
-		minute := rand.Intn(60)
-		second := rand.Intn(60)
-		value = fmt.Sprintf("'%02d:%02d:%02d'", hour, minute, second)
+		if d6() < 6 {
+			hour := rand.Intn(24)
+			minute := rand.Intn(60)
+			second := rand.Intn(60)
+			value = fmt.Sprintf("'%02d:%02d:%02d'", hour, minute, second)
+		} else {
+			value = "CURRENT_TIME"
+		}
 	case "DATETIME":
-		year := 2000 + rand.Intn(23)
-		month := 1 + rand.Intn(12)
-		day := 1 + rand.Intn(28)
-		hour := rand.Intn(24)
-		minute := rand.Intn(60)
-		second := rand.Intn(60)
-		value = fmt.Sprintf("'%04d-%02d-%02d %02d:%02d:%02d'", year, month, day, hour, minute, second)
+		if d6() < 6 {
+			year := rand.Intn(9999)
+			month := 1 + rand.Intn(12)
+			day := 1 + rand.Intn(28)
+			hour := rand.Intn(24)
+			minute := rand.Intn(60)
+			second := rand.Intn(60)
+			value = fmt.Sprintf("'%04d-%02d-%02d %02d:%02d:%02d'", year, month, day, hour, minute, second)
+		} else {
+			value = "CURRENT_TIMESTAMP"
+		}
 	default:
 		value = "NULL"
 	}
