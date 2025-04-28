@@ -441,6 +441,30 @@ func (s *SelectClause) Out() string {
 }
 
 type AliasedRelation struct {
+type ExplainStmt struct {
+	*Base
+	QueryPlan bool
+	Stmt      Prod
+}
+
+func NewExplainStmt(p Prod) *ExplainStmt {
+	var b *Base
+	if p != nil {
+		b = p.GetBase()
+	}
+	return &ExplainStmt{
+		Base: b,
+	}
+}
+
+func (s *ExplainStmt) Out() string {
+	var buf strings.Builder
+	buf.WriteString("EXPLAIN ")
+	if s.QueryPlan {
+		buf.WriteString("QUERY PLAN ")
+	}
+	buf.WriteString(s.Stmt.Out())
+	return buf.String()
 }
 
 type TableSubquery struct {

@@ -70,6 +70,16 @@ func GenerateStatement(s *ast.Scope) ast.Prod {
 	return GenerateSelect(nil, s)
 }
 
+func GenerateExplain(p ast.Prod, s *ast.Scope) *ast.ExplainStmt {
+	expl := ast.NewExplainStmt(p)
+	if d6() < 3 {
+		expl.QueryPlan = true
+	}
+	expl.Stmt = GenerateStatement(s)
+
+	return expl
+}
+
 // GenerateInsert picks a random table and then generates
 // values expressions for each column
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L374
