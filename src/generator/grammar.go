@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/cnordg/ast-group-project/src/ast"
 	"github.com/cnordg/ast-group-project/src/schema"
@@ -26,6 +28,8 @@ func generateTable(num int) *schema.Schema {
 		nCols := 2 + rand.Intn(9)
 
 		cols := make([]schema.Column, nCols)
+		defaults := make([]string, nCols)
+		dummy := &ast.SelectStmt{Base: ast.NewBase(nil)}
 		for i := range nCols {
 			col := schema.Column{
 				Name: fmt.Sprintf("c%d", i),
@@ -35,11 +39,20 @@ func generateTable(num int) *schema.Schema {
 			// TODO: randomly add primary key constraubt
 			// TODO: randomly add not null
 			// TODO: randomly add unique
-			// TODO: randomly add default
 
 			cols[i] = col
+			if d6() == 1 {
+				v := generateConstantExpression(dummy, col.Typ)
+				defaults = append(defaults, v.Out())
+			}
 		}
-		tab := schema.NewTable(fmt.Sprintf("t%d", i), cols)
+		tab := schema.NewTable(
+			fmt.Sprintf("t%d", i),
+			cols,
+			defaults,
+			rand.Intn(2) == 0,
+			rand.Intn(2) == 0,
+		)
 		// TODO: randomly reference another table
 
 		schm.Tables = append(schm.Tables, tab)
@@ -243,6 +256,8 @@ func GenerateSelect(p ast.Prod, s *ast.Scope) *ast.SelectStmt {
 
 	if d100() == 1 {
 		stmt.SetQuantifier = "DISTINCT"
+	} else if d100() == 1 {
+		stmt.SetQuantifier = "ALL"
 	}
 
 	stmt.FromClause = generateFromClause(stmt)
@@ -499,7 +514,12 @@ func generateTableOrQueryName(p ast.Prod) *ast.TableOrQueryName {
 	tq.IncrStmtUid("table")
 	alias := fmt.Sprintf("t%d", tq.GetStmtUid("table"))
 
-	tq.Refs = []schema.NamedRelation{schema.NewTable(alias, tq.Table.Columns())}
+	tq.Refs = []schema.NamedRelation{
+		schema.NewTable(
+			alias, tq.Table.Columns(),
+			[]string{}, false, false,
+		),
+	}
 
 	return tq
 }

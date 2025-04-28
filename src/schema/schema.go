@@ -22,6 +22,7 @@ type SqlType string
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/schema.hh#L16
 type Schema struct {
+	Name       string // NOTE: currently not used
 	Tables     []NamedRelation
 	Operators  []*Operator
 	Routines   []*Routine
@@ -46,15 +47,24 @@ func (s *Schema) Out() string {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L65
 type Table struct {
-	name string
-	cols []Column
+	name     string
+	cols     []Column
+	defaults []string
 	// TODO: add constraints
+	// true means a tempory
+	// table will be generated
+	isTemp bool
+	// if true it will add
+	// 'IF NOT EXISTS' to Out()
+	ifNotExists bool
 }
 
-func NewTable(n string, cols []Column) *Table {
+func NewTable(n string, cols []Column, defaults []string, isTemp, ifNotExists bool) *Table {
 	return &Table{
-		name: n,
-		cols: cols,
+		name:        n,
+		cols:        cols,
+		isTemp:      isTemp,
+		ifNotExists: ifNotExists,
 	}
 }
 
@@ -66,6 +76,10 @@ func (t *Table) Out() string {
 	for i, col := range t.cols {
 		buf.WriteString("    ")
 		buf.WriteString(col.Out())
+		if len(t.defaults) > 0 && t.defaults[i] != "" {
+			buf.WriteString(" DEFAULT ")
+			buf.WriteString(t.defaults[i])
+		}
 		if i < len(t.cols)-1 {
 			buf.WriteString(",")
 		}
