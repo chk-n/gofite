@@ -26,3 +26,9 @@ go.work.sum
 
 # we only want .zip commited
 *.tar
+
+# Logs of diff test engine
+src/logs/
+
+# sample test main
+run.go
