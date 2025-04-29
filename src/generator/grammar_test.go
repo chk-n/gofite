@@ -303,6 +303,36 @@ func TestCompoundGeneration(t *testing.T) {
 	}
 }
 
+func TestSavepointGeneration(t *testing.T) {
+	t.Parallel()
+
+	nIter := 100
+	for range nIter {
+		sch := generateTable(1)
+		schemaSql := sch.Out() + "\n "
+
+		// generate queries
+		nQueries := 250
+		for range nQueries {
+			s := &ast.Scope{
+				Tables:  sch.Tables,
+				Schema:  sch,
+				Refs:    []schema.NamedRelation{},
+				StmtSeq: make(map[string]uint),
+			}
+
+			q := GenerateSavepoint(nil, s)
+			query := schemaSql + q.Out() + ";\n"
+			cmd := exec.Command("./sqlite3-3.26.0", ":memory:", query)
+			var buf bytes.Buffer
+			cmd.Stderr = &buf
+			if err := cmd.Run(); err != nil {
+				t.Fatalf("Query failed: %s\n%s",
+					buf.String(), query)
+			}
+		}
+	}
+}
 func BenchmarkGenerateSelect(b *testing.B) {
 	schm := generateTable(1)
 

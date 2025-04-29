@@ -23,7 +23,8 @@ type Scope struct {
 	Refs []schema.NamedRelation
 	// the Schema of the database
 	// NOTE: should not be modified
-	Schema *schema.Schema
+	Schema     *schema.Schema
+	Savepoints []string
 	// tracks unique identifiers to avoid reusing
 	// idents which would cause syntax errors
 	StmtSeq map[string]uint

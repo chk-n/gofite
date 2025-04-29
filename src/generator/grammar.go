@@ -62,28 +62,25 @@ func generateTable(num int) *schema.Schema {
 	return schm
 }
 
-func GenerateStatement(s *ast.Scope) ast.Prod {
-	// TODO: add remaining statements
-	//
-
+func GenerateStatement(p ast.Prod, s *ast.Scope) ast.Prod {
 	if d42() == 1 {
-		return GenerateInsert(nil, s)
+		return GenerateInsert(p, s)
 	} else if d42() == 1 {
-		return GenerateUpdate(nil, s)
+		return GenerateUpdate(p, s)
 	} else if d42() == 1 {
-		return GenerateDelete(nil, s)
+		return GenerateDelete(p, s)
 	} else if d42() == 1 {
-		return GenerateCTE(nil, s)
+		return GenerateCTE(p, s)
 	} else if d1000() == 1 {
-		return GenerateAnalyse(nil, s)
+		return GenerateAnalyse(p, s)
 	} else if d1000()+d1000() == 1 {
-		return GenerateVacuum(nil, s)
+		return GenerateVacuum(p, s)
 	}
 	/*else if d42() == 1 {
 		return generateUpsert(nil, s)
 	}
 	*/
-	return GenerateSelect(nil, s)
+	return GenerateSelect(p, s)
 }
 
 func GenerateExplain(p ast.Prod, s *ast.Scope) *ast.ExplainStmt {
@@ -91,7 +88,7 @@ func GenerateExplain(p ast.Prod, s *ast.Scope) *ast.ExplainStmt {
 	if d6() < 3 {
 		expl.QueryPlan = true
 	}
-	expl.Stmt = GenerateStatement(s)
+	expl.Stmt = GenerateStatement(p, s)
 
 	return expl
 }
@@ -157,6 +154,60 @@ func GenerateCompound(p ast.Prod, s *ast.Scope) *ast.CompoundStmt {
 		stmt.Op = "INTERSECT"
 	case 5, 6:
 		stmt.Op = "EXCEPT"
+	}
+
+	return stmt
+}
+
+func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
+	stmt := ast.NewSavepointStmt(p, s)
+
+	// create save point
+	sp := fmt.Sprintf("sp%d", stmt.GetStmtUid("sp"))
+	stmt.IncrStmtUid("sp")
+	stmt.Name = sp
+	stmt.Scope.Savepoints = append(stmt.Scope.Savepoints, sp)
+
+	// to avoid infinite recursion we stop at the
+	// latest after 42 nested levels
+	if stmt.Level() > d42() {
+		stmt.Name = stmt.Scope.Savepoints[0]
+		return stmt
+	}
+
+	// randomly use a savepoint in rollback
+	// or release operation
+	idx := randomPickIndex(stmt.Scope.Savepoints)
+	stmt.EndIdx = idx
+	popped := stmt.Scope.Savepoints[idx:]
+	endSp := popped[len(stmt.Scope.Savepoints[:idx])-idx]
+	if d6() < 3 {
+		stmt.End = fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", endSp)
+		stmt.Scope.Savepoints = stmt.Scope.Savepoints[:idx]
+	} else if d6() < 3 {
+		stmt.End = fmt.Sprintf("RELEASE %s", endSp)
+		stmt.Scope.Savepoints = stmt.Scope.Savepoints[:idx]
+	}
+
+	stmtCnt := d12()
+	for range stmtCnt {
+		q := GenerateStatement(p, stmt.Scope)
+		stmt.Stmts = append(stmt.Stmts, q)
+	}
+
+	// randomly nest savepoints and avoid
+	// conflicts during release and rollback
+	// operations by removing end clause if
+	// nested savepoint accesses savepoint
+	// higher up in stack than current savepoint
+	// end clause
+	if d6() < 3 {
+		spStmt := GenerateSavepoint(p, stmt.Scope)
+		stmt.Stmts = append(stmt.Stmts, spStmt)
+		if spStmt.EndIdx < idx {
+			stmt.End = ""
+			stmt.EndIdx = spStmt.EndIdx
+		}
 	}
 
 	return stmt

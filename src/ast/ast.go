@@ -538,6 +538,50 @@ func (s *CompoundStmt) Out() string {
 	return buf.String()
 }
 
+// Each savepoint statement creates
+// a new savepoint, followed by a
+// randomly generated statement and
+// optionally releases or rollsback
+// a p arent savepoint
+type SavepointStmt struct {
+	*Base
+	Stmts []Prod
+	Name  string
+	// Position of chosen savepoint to
+	// rollback or release in stack
+	EndIdx int
+	// this is optional and can be
+	// ROLLBACK or RELEASE with name
+	// of the savepoint
+	End string
+}
+
+func NewSavepointStmt(p Prod, s *Scope) *SavepointStmt {
+	var b *Base
+	if p != nil {
+		b = p.GetBase()
+	}
+	stmt := &SavepointStmt{
+		Base: NewBase(b),
+	}
+	stmt.Scope = s
+
+	return stmt
+}
+
+func (s *SavepointStmt) Out() string {
+	var buf strings.Builder
+	buf.WriteString("SAVEPOINT " + s.Name)
+	buf.WriteString(";\n")
+
+	for _, stmt := range s.Stmts {
+		buf.WriteString(stmt.Out())
+		buf.WriteString(";\n")
+	}
+	buf.WriteString(s.End)
+	return buf.String()
+}
+
 type TableSubquery struct {
 	*Base
 	IsLateral bool

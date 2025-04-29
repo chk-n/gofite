@@ -38,6 +38,12 @@ func randomPick[T any](items []T) T {
 	}
 	return items[rand.Intn(len(items))]
 }
+func randomPickIndex[T any](items []T) int {
+	if len(items) == 0 {
+		panic("No items to pick from")
+	}
+	return rand.Intn(len(items))
+}
 
 // number ranges [0, t]
 func randomInt(t int) int {
