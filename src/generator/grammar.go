@@ -170,7 +170,7 @@ func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
 
 	// to avoid infinite recursion we stop at the
 	// latest after 42 nested levels
-	if stmt.Level() > d42() {
+	if stmt.Level() > d12() {
 		stmt.Name = stmt.Scope.Savepoints[0]
 		return stmt
 	}
@@ -189,7 +189,7 @@ func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
 		stmt.Scope.Savepoints = stmt.Scope.Savepoints[:idx]
 	}
 
-	stmtCnt := d12()
+	stmtCnt := d6()
 	for range stmtCnt {
 		q := GenerateStatement(p, stmt.Scope)
 		stmt.Stmts = append(stmt.Stmts, q)
@@ -604,6 +604,10 @@ func generateTableOrQueryName(p ast.Prod) *ast.TableOrQueryName {
 // creates a reference to an existing column
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L77
 func generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
+	if len(p.References()) == 0 {
+		return nil, errors.New("no references available")
+	}
+
 	if t == "" {
 		rel := randomPick(p.References())
 		cols := rel.Columns()
@@ -654,7 +658,6 @@ func generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 // creates a constant expression based on t or existing sqlite types
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L195
 func generateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
-
 	var value string
 
 	// select random type if not set
@@ -728,6 +731,8 @@ func generateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L96
 func generateBoolExpression(p ast.Prod) ast.BoolExpr {
+	assert(len(p.AvailableTypes()) > 0, "expected types to be available")
+
 	if p.Level() > d100() {
 		return generateTruthExpression(p)
 	}
@@ -754,7 +759,6 @@ func generateTruthExpression(p ast.Prod) ast.BoolExpr {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L42
 func generateComparisonOperation(p ast.Prod) ast.BoolExpr {
-
 	typ := randomPick(p.AvailableTypes())
 	left, err := retry(func() (ast.ValueExpr, error) {
 		return generateValueExpression(p, typ)
@@ -770,6 +774,7 @@ func generateComparisonOperation(p ast.Prod) ast.BoolExpr {
 	assert(err == nil, "expected no error")
 
 	return &ast.BinaryExpr{
+		Base:  p.GetBase(),
 		Left:  left,
 		Op:    op,
 		Right: right,
@@ -805,11 +810,10 @@ func generateNullPredicateExpression(p ast.Prod) ast.BoolExpr {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L119
 func generateExistsExpression(p ast.Prod) ast.BoolExpr {
-	b := ast.NewBase(p.GetBase())
 	exp := &ast.ExistsExpr{
-		Base: b,
+		Base: ast.NewBase(p.GetBase()),
 	}
-	exp.Subquery = GenerateSelect(exp, b.Scope)
+	exp.Subquery = GenerateSelect(exp, exp.Scope)
 	return exp
 }
 
@@ -1158,7 +1162,7 @@ func generateDatetimeModifier(timeValue string) string {
 
 func generateDay(month int) int {
 	var d int
-	// NOTE: we will getinvalid days
+	// NOTE: we will get invalid days
 	// if 'y' is a leap year
 	if month == 7 {
 		d = randomInt(28)
