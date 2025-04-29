@@ -635,13 +635,15 @@ func generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L17
 func generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
-	// TODO: add case expressions
 	// TODO: add coalesce
 	// TODO: add nullif
+	// TODO: add cast
 	if d20() == 1 && p.Level() < d6() && isWindowFunctionAllowed(p) {
 		return generateWindowFunction(p, t)
 	} else if p.Level() < d6() && d6() == 1 {
 		return generateFunctionCallExpression(p, t, false)
+	} else if p.Level() < d6() && d9() == 1 {
+		return generateCaseExpression(p, t)
 	} else if len(p.References()) > 0 && d20() > 1 {
 		return generateColumnReference(p, t)
 	}
@@ -752,7 +754,6 @@ func generateTruthExpression(p ast.Prod) ast.BoolExpr {
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L42
 func generateComparisonOperation(p ast.Prod) ast.BoolExpr {
-	// b := ast.NewBase(p.GetBase())
 
 	typ := randomPick(p.AvailableTypes())
 	left, err := retry(func() (ast.ValueExpr, error) {
@@ -824,6 +825,57 @@ func randomOperatorByType(t schema.SqlType) string {
 	default:
 		return randomPick(commonOps)
 	}
+}
+
+func generateCaseExpression(p ast.Prod, constraint schema.SqlType) (ast.ValueExpr, error) {
+	b := ast.NewBase(p.GetBase())
+	exp := &ast.CaseExpr{
+		Base: b,
+	}
+
+	// default case we generate 'iff' variant:
+	// CASE WHEN c1 THEN v1 ELSE v2 END
+	n := 1
+	if d6() < 4 {
+		// if this branch is run we generate
+		// CASE x WHEN c1 THEN v1 ... ELSE vn END
+		// with multiple when then
+		n = d12()
+		val, err := retry(func() (ast.ValueExpr, error) {
+			return generateColumnReference(exp, constraint)
+		})
+		if err != nil {
+			return nil, err
+		}
+		exp.Val = val
+	}
+
+	if len(exp.AvailableTypes()) == 0 {
+		return nil, errors.New("no available types")
+	}
+
+	for range n {
+		when := generateBoolExpression(exp)
+		then, err := retry(func() (ast.ValueExpr, error) {
+			return generateValueExpression(exp, constraint)
+		})
+		if err != nil {
+			return nil, err
+		}
+		exp.When = append(exp.When, when)
+		exp.Then = append(exp.Then, then)
+	}
+
+	// else clause
+	els, err := retry(func() (ast.ValueExpr, error) {
+		return generateValueExpression(exp, constraint)
+	})
+	if err != nil {
+		return nil, err
+	}
+	exp.Else = els
+
+	return exp, nil
 }
 
 // --------- //

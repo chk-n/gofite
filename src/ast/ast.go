@@ -798,6 +798,46 @@ func (e *WindowFunExpr) Type() schema.SqlType {
 	return e.Typ
 }
 
+type CaseExpr struct {
+	*Base
+	Val  ValueExpr
+	When []ValueExpr
+	Then []ValueExpr
+	Else ValueExpr
+	Typ  schema.SqlType
+}
+
+func (e *CaseExpr) Out() string {
+	var buf strings.Builder
+
+	buf.WriteString(e.Indent())
+	buf.WriteString("CASE")
+	if e.Val != nil {
+		buf.WriteString(" " + e.Val.Out())
+	}
+	buf.WriteString(" ")
+	for i := range e.When {
+		w := e.When[i]
+		t := e.Then[i]
+		buf.WriteString("WHEN " + w.Out())
+		buf.WriteString(" THEN " + t.Out())
+		buf.WriteString("\n")
+		if i+1 != len(e.When) {
+			buf.WriteString(e.Indent() + "     ")
+		}
+	}
+	buf.WriteString(e.Indent() + "     ")
+	buf.WriteString("ELSE " + e.Else.Out())
+	buf.WriteString("\n")
+	buf.WriteString(e.Indent())
+	buf.WriteString("END")
+	return buf.String()
+}
+
+func (e *CaseExpr) Type() schema.SqlType {
+	return e.Typ
+}
+
 // ---- //
 // Join //
 // ---- //
