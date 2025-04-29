@@ -4,9 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
-	"time"
 
 	"github.com/cnordg/ast-group-project/src/ast"
 	"github.com/cnordg/ast-group-project/src/schema"
@@ -116,13 +114,14 @@ func GenerateAnalyse(p ast.Prod, s *ast.Scope) *ast.AnalyseStmt {
 func GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
 	stmt := ast.NewVacuumStmt(p)
 
-	if d100() == 1 {
-		dir, err := os.MkdirTemp("", "sqlite3-")
-		if err != nil {
-			panic(err)
-		}
-		stmt.File += fmt.Sprintf("'%s/%d'", dir, time.Now().UnixMilli())
-	}
+	// Not supported in 3.26.0..
+	// if d100() == 1 {
+	// 	dir, err := os.MkdirTemp("", "sqlite3-")
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	stmt.File += fmt.Sprintf("'%s/%d'", dir, time.Now().UnixMilli())
+	// }
 
 	if s.Schema.Name != "" {
 		stmt.Name = s.Schema.Name
