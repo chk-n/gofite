@@ -511,6 +511,33 @@ func (s *VacuumStmt) Out() string {
 		" INTO " + s.File
 }
 
+type CompoundStmt struct {
+	*Base
+	Lhs         *SelectStmt
+	Rhs         *SelectStmt
+	Op          string
+	LimitClause string
+}
+
+func NewCompoundStmt(p Prod) *CompoundStmt {
+	var b *Base
+	if p != nil {
+		b = p.GetBase()
+	}
+	return &CompoundStmt{
+		Base: b,
+	}
+}
+
+func (s *CompoundStmt) Out() string {
+	var buf strings.Builder
+	buf.WriteString(s.Lhs.Out())
+	buf.WriteString("\n" + s.Op + "\n")
+	buf.WriteString(s.Rhs.Out())
+	buf.WriteString("\n" + s.LimitClause)
+	return buf.String()
+}
+
 type TableSubquery struct {
 	*Base
 	IsLateral bool

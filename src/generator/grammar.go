@@ -133,6 +133,36 @@ func GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
 	return stmt
 }
 
+// Generates UNION, INTERSECT and EXCEPT queries
+func GenerateCompound(p ast.Prod, s *ast.Scope) *ast.CompoundStmt {
+	stmt := ast.NewCompoundStmt(p)
+	slct := GenerateSelect(p, s)
+	// LIMIT clause needs to come after UNION
+	stmt.LimitClause = slct.LimitClause
+	slct.LimitClause = ""
+
+	// the reason we set both sides to the same
+	// query is that grammar currently cant
+	// generate queries based on a predefined
+	// select list (we generate select list
+	// based on FromClause)
+	stmt.Lhs = slct
+	stmt.Rhs = slct
+
+	switch d6() {
+	case 1:
+		stmt.Op = "UNION"
+	case 2:
+		stmt.Op = "UNION ALL"
+	case 3, 4:
+		stmt.Op = "INTERSECT"
+	case 5, 6:
+		stmt.Op = "EXCEPT"
+	}
+
+	return stmt
+}
+
 // GenerateInsert picks a random table and then generates
 // values expressions for each column
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L374
@@ -282,9 +312,8 @@ func generateFromClause(p ast.Prod) *ast.FromClause {
 		c.Base.Scope.Refs = append(c.Base.Scope.Refs, r)
 	}
 
-	// TODO: add lateral subquery
-	// for d6() > 5 {
-	// }
+	// NOTE: sqlite 3.26.0 does not support
+	// lateral queries yet
 	return c
 }
 
