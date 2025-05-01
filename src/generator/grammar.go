@@ -62,6 +62,65 @@ func generateTable(num int) *schema.Schema {
 	return schm
 }
 
+func GenerateView(p ast.Prod, s *ast.Scope) ast.Prod {
+	view := ast.NewViewStmt(p, s)
+
+	view.Name = fmt.Sprintf("v%d", view.GetStmtUid("view"))
+	view.IncrStmtUid("view")
+
+	if d6() < 4 {
+		view.Temporary = true
+	}
+	if d6() < 4 {
+		view.IfNotExists = true
+	}
+
+	if d6() < 5 {
+		slct := GenerateSelect(view, view.Scope)
+		view.Select = slct
+		view.Scope.Refs = append(view.Scope.Refs, slct.References()...)
+	} else {
+		cte := GenerateCTE(view, view.Scope)
+		view.Select = cte
+		for i := range cte.Refs {
+			aliased := &schema.AliasedRelation{
+				Alias: cte.Refs[i],
+				Cols:  cte.Query.SelectClause.DerivedColumns,
+			}
+			view.Scope.Refs = append(view.Scope.Refs, aliased)
+		}
+	}
+
+	// at least one column in view
+start:
+	col, err := retry(func() (ast.ValueExpr, error) {
+		typ := randomPick(view.AvailableTypes())
+		// modified version of generateColumnReference
+		// as views cant have table qualified names
+		// e.g. (t0.c1)
+		pairs := ast.RefsOfType(view.References(), typ)
+		if len(pairs) == 0 {
+			return nil, errors.New("no matching pairs found by type")
+		}
+		pick := randomPick(pairs)
+		return &ast.ColumnReference{
+			Base:      view.Base,
+			Reference: pick.Col.Name,
+			Typ:       typ,
+		}, nil
+	})
+	assert(err == nil, "expected no error")
+
+	view.Cols = append(view.Cols, col)
+
+	if d6() > 1 {
+		goto start
+	}
+
+	return view
+
+}
+
 func GenerateStatement(p ast.Prod, s *ast.Scope) ast.Prod {
 	if d42() == 1 {
 		return GenerateInsert(p, s)
@@ -306,8 +365,10 @@ repeat1:
 
 	alias := fmt.Sprintf("cte%d", stmt.GetStmtUid("cte"))
 	stmt.IncrStmtUid("cte")
+	stmt.Refs = append(stmt.Refs, alias)
+
 	aliasedRel := query.SelectClause.DerivedColumns
-	stmt.Refs = append(stmt.Refs, &schema.AliasedRelation{Alias: alias, Cols: aliasedRel})
+	stmt.Scope.Refs = append(stmt.Scope.Refs, &schema.AliasedRelation{Alias: alias, Cols: aliasedRel})
 
 	if d6() > 2 {
 		goto repeat1

@@ -100,6 +100,63 @@ type TableRef interface {
 	References() []schema.NamedRelation
 }
 
+type ViewStmt struct {
+	*Base
+	Temporary   bool
+	IfNotExists bool
+	Name        string
+	Cols        []ValueExpr
+	Select      Prod
+}
+
+func NewViewStmt(p Prod, s *Scope) *ViewStmt {
+
+	var b *Base
+	if p != nil {
+		b = p.GetBase()
+	}
+	b = NewBase(b)
+	b.Scope = s
+	return &ViewStmt{
+		Base: b,
+	}
+}
+
+func (s *ViewStmt) Out() string {
+	var buf strings.Builder
+
+	buf.WriteString("CREATE ")
+
+	if s.Temporary {
+		buf.WriteString("TEMPORARY ")
+	}
+
+	buf.WriteString("VIEW ")
+
+	if s.IfNotExists {
+		buf.WriteString("IF NOT EXISTS ")
+	}
+
+	buf.WriteString(s.Name)
+
+	// Add column list if specified
+	if len(s.Cols) > 0 {
+		buf.WriteString(" (")
+		for i, col := range s.Cols {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(col.Out())
+		}
+		buf.WriteString(")")
+	}
+
+	buf.WriteString(" AS ")
+	buf.WriteString(s.Select.Out())
+
+	return buf.String()
+}
+
 type InsertStmt struct {
 	*Base
 	LocalScope *Scope
@@ -273,11 +330,14 @@ func (s *DeleteStmt) Out() string {
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L315
 type CTEStmt struct {
 	*Base
-	LocalScope  *Scope
+	LocalScope *Scope
+
+	// the name of the CTE
+	Refs []string
+	// the query of the CTE:w
 	WithQueries []*SelectStmt
 	// Main select query
 	Query *SelectStmt
-	Refs  []schema.NamedRelation
 }
 
 func NewCTEStmt(p Prod, s *Scope) *CTEStmt {
@@ -301,7 +361,7 @@ func (s *CTEStmt) Out() string {
 	buf.WriteString("WITH ")
 	for i, q := range s.WithQueries {
 		buf.WriteString(s.Indent())
-		buf.WriteString(s.Refs[i].Name())
+		buf.WriteString(s.Refs[i])
 		buf.WriteString(" AS (")
 		buf.WriteString(q.Out())
 		buf.WriteString(")")
