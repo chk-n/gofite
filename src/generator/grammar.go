@@ -228,7 +228,7 @@ func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
 	stmt.Scope.Savepoints = append(stmt.Scope.Savepoints, sp)
 
 	// to avoid infinite recursion we stop at the
-	// latest after 42 nested levels
+	// latest after 12 nested levels
 	if stmt.Level() > d12() {
 		stmt.Name = stmt.Scope.Savepoints[0]
 		return stmt
@@ -250,7 +250,7 @@ func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
 
 	stmtCnt := d6()
 	for range stmtCnt {
-		q := GenerateStatement(p, stmt.Scope)
+		q := GenerateStatement(stmt, stmt.Scope)
 		stmt.Stmts = append(stmt.Stmts, q)
 	}
 
