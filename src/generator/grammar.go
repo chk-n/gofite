@@ -703,6 +703,9 @@ func generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 	// TODO: add nullif
 	if d20() == 1 && p.Level() < d6() && isWindowFunctionAllowed(p) {
 		return generateWindowFunction(p, t)
+	} else if p.Level() < d6() && 1 == d42() {
+		return generateCoalesceExpression(p, t)
+	} else if p.Level() < d6() && 1 == d42() {
 	} else if p.Level() < d6() && d6() == 1 {
 		return generateFunctionCallExpression(p, t, false)
 	} else if p.Level() < d6() && d9() == 1 {
@@ -960,6 +963,27 @@ pick:
 	expr.Typ = randomPick(types)
 	if expr.Typ == "NULL" {
 		goto pick
+	}
+
+	return expr, nil
+}
+
+func generateCoalesceExpression(p ast.Prod, constraint schema.SqlType) (*ast.CoalesceExpr, error) {
+	expr := &ast.CoalesceExpr{
+		Base: ast.NewBase(p.GetBase()),
+	}
+
+	numExprs := 2 + rand.Intn(5)
+	expr.Exprs = make([]ast.ValueExpr, numExprs)
+
+	types := []schema.SqlType{constraint, "", "NULL"}
+	var err error
+	for i := range numExprs {
+		expr.Exprs[i], err = retry(func() (ast.ValueExpr, error) {
+			t := randomPick(types)
+			return generateValueExpression(expr, t)
+		})
+		assert(err == nil, "expected no error")
 	}
 
 	return expr, nil

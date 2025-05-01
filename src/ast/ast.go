@@ -912,6 +912,33 @@ func (c *CastExpr) Type() schema.SqlType {
 	return c.Typ
 }
 
+type CoalesceExpr struct {
+	*Base
+	Exprs []ValueExpr
+	Typ   schema.SqlType
+}
+
+func (e *CoalesceExpr) Out() string {
+	var buf strings.Builder
+	buf.WriteString("COALESCE(")
+	for i, expr := range e.Exprs {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(expr.Out())
+	}
+	buf.WriteString(")")
+	return buf.String()
+}
+
+func (e *CoalesceExpr) Type() schema.SqlType {
+	for _, e := range e.Exprs {
+		if e.Type() != "NULL" {
+			return e.Type()
+		}
+	}
+	return "NULL"
+}
 // ---- //
 // Join //
 // ---- //
