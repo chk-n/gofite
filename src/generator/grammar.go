@@ -700,18 +700,18 @@ func generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L17
 func generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
-	// TODO: add nullif
 	if d20() == 1 && p.Level() < d6() && isWindowFunctionAllowed(p) {
 		return generateWindowFunction(p, t)
 	} else if p.Level() < d6() && 1 == d42() {
+		return generateCastExpression(p, t)
+	} else if p.Level() < d6() && 1 == d42() {
 		return generateCoalesceExpression(p, t)
 	} else if p.Level() < d6() && 1 == d42() {
+		return generateIfNullIfExpression(p, t)
 	} else if p.Level() < d6() && d6() == 1 {
 		return generateFunctionCallExpression(p, t, false)
 	} else if p.Level() < d6() && d9() == 1 {
 		return generateCaseExpression(p, t)
-	} else if p.Level() < d6() && 1 == d42() {
-		return generateCastExpression(p, t)
 	} else if len(p.References()) > 0 && d20() > 1 {
 		return generateColumnReference(p, t)
 	}
@@ -984,6 +984,32 @@ func generateCoalesceExpression(p ast.Prod, constraint schema.SqlType) (*ast.Coa
 			return generateValueExpression(expr, t)
 		})
 		assert(err == nil, "expected no error")
+	}
+
+	return expr, nil
+}
+
+func generateIfNullIfExpression(p ast.Prod, constraint schema.SqlType) (*ast.IfNullIfExpr, error) {
+	expr := &ast.IfNullIfExpr{
+		Base: ast.NewBase(p.GetBase()),
+	}
+
+	expr.IsIfNull = d6() < 4
+
+	var err error
+	expr.Expr1, err = generateValueExpression(expr, constraint)
+	if err != nil {
+		return nil, err
+	}
+
+	expr.Expr2, err = generateValueExpression(expr, constraint)
+	if err != nil {
+		return nil, err
+	}
+
+	expr.Typ = constraint
+	if constraint == "" {
+		expr.Typ = expr.Expr1.Type()
 	}
 
 	return expr, nil

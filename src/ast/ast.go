@@ -939,6 +939,26 @@ func (e *CoalesceExpr) Type() schema.SqlType {
 	}
 	return "NULL"
 }
+
+type IfNullIfExpr struct {
+	*Base
+	IsIfNull bool // true for IFNULL
+	Expr1    ValueExpr
+	Expr2    ValueExpr
+	Typ      schema.SqlType
+}
+
+func (e *IfNullIfExpr) Out() string {
+	if e.IsIfNull {
+		return fmt.Sprintf("IFNULL(%s, %s)", e.Expr1.Out(), e.Expr2.Out())
+	}
+	return fmt.Sprintf("NULLIF(%s, %s)", e.Expr1.Out(), e.Expr2.Out())
+}
+
+func (e *IfNullIfExpr) Type() schema.SqlType {
+	return e.Typ
+}
+
 // ---- //
 // Join //
 // ---- //
