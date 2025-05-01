@@ -898,6 +898,20 @@ func (e *CaseExpr) Type() schema.SqlType {
 	return e.Typ
 }
 
+type CastExpr struct {
+	*Base
+	Expr ValueExpr
+	Typ  schema.SqlType
+}
+
+func (c *CastExpr) Out() string {
+	return fmt.Sprintf("CAST(%s AS %s)", c.Expr.Out(), c.Typ)
+}
+
+func (c *CastExpr) Type() schema.SqlType {
+	return c.Typ
+}
+
 // ---- //
 // Join //
 // ---- //

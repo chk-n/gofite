@@ -700,15 +700,15 @@ func generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L17
 func generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
-	// TODO: add coalesce
 	// TODO: add nullif
-	// TODO: add cast
 	if d20() == 1 && p.Level() < d6() && isWindowFunctionAllowed(p) {
 		return generateWindowFunction(p, t)
 	} else if p.Level() < d6() && d6() == 1 {
 		return generateFunctionCallExpression(p, t, false)
 	} else if p.Level() < d6() && d9() == 1 {
 		return generateCaseExpression(p, t)
+	} else if p.Level() < d6() && 1 == d42() {
+		return generateCastExpression(p, t)
 	} else if len(p.References()) > 0 && d20() > 1 {
 		return generateColumnReference(p, t)
 	}
@@ -941,6 +941,28 @@ func generateCaseExpression(p ast.Prod, constraint schema.SqlType) (ast.ValueExp
 	exp.Else = els
 
 	return exp, nil
+}
+
+func generateCastExpression(p ast.Prod, constraint schema.SqlType) (*ast.CastExpr, error) {
+	expr := &ast.CastExpr{
+		Base: ast.NewBase(p.GetBase()),
+	}
+
+	sourceExpr, err := retry(func() (ast.ValueExpr, error) {
+		return generateValueExpression(expr, "")
+	})
+	assert(err == nil, "expected no error")
+	expr.Expr = sourceExpr
+
+pick:
+	// NOTE: this might not always yield
+	// a correct cast
+	expr.Typ = randomPick(types)
+	if expr.Typ == "NULL" {
+		goto pick
+	}
+
+	return expr, nil
 }
 
 // --------- //
