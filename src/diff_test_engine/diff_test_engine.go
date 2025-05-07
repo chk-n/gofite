@@ -7,12 +7,11 @@ sqlite_new_driver -> verifying driver
 sqlite_old_driver -> driver under test
 
 Exports:
-- CreateLogFile(fname string) (*os.File, error)
-- InitializeDB(driver string, initSQL string, debugMessage bool) (*sql.DB, error)
-- ExecAndCompareQuery(query string, db_old *sql.DB, db_new *sql.DB, logfile *os.File)
-- ExecAndCompareSQLErrors(sql string, db_old *sql.DB, db_new *sql.DB, logfile *os.File)
-- CompareDBStates(db_old *sql.DB, db_new *sql.DB, logfile *os.File)
-- DumpDB(db *sql.DB) (string, error)
+- New(l *slog.Logger) *DiffTestEngine
+- (*DiffTestEngine) Close()
+- (*DiffTestEngine) ExecAndCompareQuery(query string)
+- (*DiffTestEngine) ExecAndCompareSQLErrors(sql string)
+- (*DiffTestEngine) CompareDBStates(db_old *sql.DB)
 
 Algorithm:
 1. Initialize the database with a known state.
@@ -26,120 +25,94 @@ Algorithm:
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	"os"
-	"time"
-
-	sqlite_old_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_26_driver"   // To be tested version
-	sqlite_new_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_39_4_driver" // Verifying version
+	"log/slog"
 )
 
-// init	initializes old and new SQLite drivers, outputs versions
-func init() {
-	fmt.Println("[*] Initializing SQLite Differential Testing Engine")
-	res0, res1, res2 := sqlite_old_driver.Version()
-	fmt.Println("[**] Old SQLite Version:", res0, res1, res2)
-	res0, res1, res2 = sqlite_new_driver.Version()
-	fmt.Println("[**] New SQLite Version:", res0, res1, res2)
+var mismatchErrorErr = errors.New("mismatch error")
+var mismatchOutputErr = errors.New("mismatch output")
+
+type DiffTestEngine struct {
+	old *sql.DB
+	new *sql.DB
+	l   *slog.Logger
 }
 
-// CreateLogFile creates a log file in the logs directory with the current timestamp, if empty file name given.
-func CreateLogFile(fname string) (*os.File, error) {
-	// Check if the logs directory exists, if not create it
-	_ = os.Mkdir("./logs", 0755)
-	// Create a logfile
-	if fname == "" {
-		fname = time.Now().Format(time.RFC3339)
-	}
-	logfile, err := os.OpenFile("logs/"+fname+".txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+func New(l *slog.Logger) *DiffTestEngine {
+	dbNew, err := sql.Open("sqlite_new", ":memory:")
 	if err != nil {
-		fmt.Println("Error creating logfile:", err)
-		return nil, err
+		panic("unable to open sqlite_new: " + err.Error())
 	}
-	return logfile, nil
+	dbOld, err := sql.Open("sqlite_old", ":memory:")
+	if err != nil {
+		panic("unable to open sqlite_old: " + err.Error())
+	}
+
+	return &DiffTestEngine{
+		new: dbNew,
+		old: dbOld,
+		l:   l,
+	}
 }
 
-func writeLogMismatch(f *os.File, reason string, query string, outOld string, outNew string) {
-	f.WriteString("=== " + time.Now().Format(time.RFC3339) + " ===\n")
-	f.WriteString(fmt.Sprintf("Reason: %s\nQuery: %s\n[Old] %s\n[New] %s\n\n", reason, query, outOld, outNew))
+func (d *DiffTestEngine) Close() {
+	d.old.Close()
+	d.new.Close()
 }
 
-// ExecAndCompareSQLErrors executes the SQL command on both databases and compares the errors, writing to the log file on mismatch.
+// ExecAndCompareSQLErrors executes the SQL command on both databases and compares the errors.
+// If one errors but the other doesnt, the error of the db is returned.
 // Meant to be used with SQL statements that do not return results (e.g., INSERT, UPDATE, DELETE).
-func ExecAndCompareSQLErrors(sql string, db_old *sql.DB, db_new *sql.DB, logfile *os.File) {
+func (d *DiffTestEngine) ExecAndCompareSQLErrors(sql string) error {
 	// Run the SQL on both databases
-	err_old := execSQLNoResult(db_old, sql)
-	err_new := execSQLNoResult(db_new, sql)
+	err_old := execSQLNoResult(d.old, sql)
+	err_new := execSQLNoResult(d.new, sql)
 
-	// Check if one crashed and the other didn't or crashed with a different error
-	if (err_old != nil) != (err_new != nil) {
-		writeLogMismatch(logfile, "crash_old_vs_new", sql, fmt.Sprint(err_old), fmt.Sprint(err_new))
-		fmt.Printf("Crash mismatch!\nSQL: %s\nOld: %s\nNew: %s\n", sql, fmt.Sprint(err_old), fmt.Sprint(err_new))
-		return
-	}
+	// Check for errors
+	return checkErr(err_old, err_new)
 }
 
 // CompareDBStates compares the states of the two databases by dumping and comparing their contents, writing to the log file on mismatch.
 // Meant to be used to verify the effect of SQL statements that do not return results (e.g., INSERT, UPDATE, DELETE).
-func CompareDBStates(db_old *sql.DB, db_new *sql.DB, logfile *os.File) {
+func (d *DiffTestEngine) CompareDBStates() error {
 	// Dump the databases
-	dump_old, err_old := DumpDB(db_old)
-	dump_new, err_new := DumpDB(db_new)
+	dump_old, err_old := dumpDB(d.old)
+	dump_new, err_new := dumpDB(d.new)
 
-	// Check if one crashed and the other didn't
-	if (err_old != nil) != (err_new != nil) {
-		writeLogMismatch(logfile, "crash_old_vs_new", "DUMP", fmt.Sprint(err_old), fmt.Sprint(err_new))
-		fmt.Printf("Crash detected!\nDump: %s\nOld: %s\nNew: %s\n", "DUMP", fmt.Sprint(err_old), fmt.Sprint(err_new))
-		return
-	}
-
-	// Check if both crashed but with different errors
-	if err_old != nil && err_new != nil && err_old.Error() != err_new.Error() {
-		writeLogMismatch(logfile, "crash_old_vs_new", "DUMP", fmt.Sprint(err_old), fmt.Sprint(err_new))
-		fmt.Printf("Crash mismatch!\nQuery: %s\nOld: %s\nNew: %s\n", "DUMP", fmt.Sprint(err_old), fmt.Sprint(err_new))
-		return
+	// Check for errors
+	if err := checkErr(err_old, err_new); err != nil {
+		return err
 	}
 
 	// Check results
 	if dump_old != dump_new {
-		writeLogMismatch(logfile, "mismatch_output", "DUMP", dump_old, dump_new)
-		fmt.Printf("Result mismatch!\nDump: %s\nOld: %s\nNew: %s\n", "DUMP", dump_old, dump_new)
-		return
+		err := fmt.Errorf("old: %s\nnew: %s", dump_old, dump_new)
+		return errors.Join(mismatchOutputErr, err)
 	}
+
+	return nil
 }
 
 // ExecAndCompareQuery executes the SQL query on both databases and compares the results, writing to the log file on mismatch.
 // Meant to be used with SQL queries that return results (e.g., SELECT).
-func ExecAndCompareQuery(query string, db_old *sql.DB, db_new *sql.DB, logfile *os.File) {
+func (d *DiffTestEngine) ExecAndCompareQuery(query string) error {
 	// Run the query on both databases
-	result_old, err_old := execQueryWithResult(db_old, query)
-	result_new, err_new := execQueryWithResult(db_new, query)
+	result_old, err_old := execQueryWithResult(d.old, query)
+	result_new, err_new := execQueryWithResult(d.new, query)
 
-	// Check if one crashed and the other didn't
-	if (err_old != nil) != (err_new != nil) {
-		writeLogMismatch(logfile, "crash_old_vs_new", query, fmt.Sprint(err_old), fmt.Sprint(err_new))
-		fmt.Printf("Crash detected!\nQuery: %s\nOld: %s\nNew: %s\n", query, fmt.Sprint(err_old), fmt.Sprint(err_new))
-		return
-	}
-
-	// Check if both crashed but with different errors
-	if err_old != nil && err_new != nil && err_old.Error() != err_new.Error() {
-		writeLogMismatch(logfile, "crash_old_vs_new", query, fmt.Sprint(err_old), fmt.Sprint(err_new))
-		fmt.Printf("Crash mismatch!\nQuery: %s\nOld: %s\nNew: %s\n", query, fmt.Sprint(err_old), fmt.Sprint(err_new))
-		return
+	// Check for errors
+	if err := checkErr(err_old, err_new); err != nil {
+		return err
 	}
 
 	// Check results
 	if result_old != result_new {
-		writeLogMismatch(logfile, "mismatch_output", query, result_old, result_new)
-		fmt.Printf("Result mismatch!\nQuery: %s\nOld: %s\nNew: %s\n", query, result_old, result_new)
-		return
+		err := fmt.Errorf("old: %s\nnew: %s", result_old, result_new)
+		return errors.Join(mismatchOutputErr, err)
 	}
-}
 
-// Only used for testing purposes
-func ExecSQLNoResult(db *sql.DB, sql string) error {
-	return execSQLNoResult(db, sql)
+	return nil
 }
 
 func execSQLNoResult(db *sql.DB, sql string) error {
@@ -183,10 +156,10 @@ func execQueryWithResult(db *sql.DB, query string) (string, error) {
 	return result, nil
 }
 
-// DumpDB dumps the contents of the database to a string.
+// dumpDB dumps the contents of the database to a string.
 // It retrieves the schema of the database and the contents of each table.
 // Exported for debugging purposes.
-func DumpDB(db *sql.DB) (string, error) {
+func dumpDB(db *sql.DB) (string, error) {
 	// Get the schema of the database
 	result, err := execQueryWithResult(db, "SELECT sql FROM sqlite_master WHERE type='table';")
 	if err != nil {
@@ -249,32 +222,23 @@ func dumpTable(db *sql.DB, tableName string) (string, error) {
 	return result, nil
 }
 
-// InitializeDB initializes a new SQLite database in memory and executes the provided SQL commands.
-// "driver" parameter can only be "sqlite_old" or "sqlite_new".
-// If initSQL is empty, it creates an empty database.
-func InitializeDB(driver string, initSQL string, debugMessage bool) (*sql.DB, error) {
-	if debugMessage {
-		var res0, res2 string
-		var res1 int
-		if driver == "sqlite_old" {
-			res0, res1, res2 = sqlite_old_driver.Version()
-		} else {
-			res0, res1, res2 = sqlite_new_driver.Version()
+func checkErr(err1, err2 error) error {
+	// Check if one crashed and the other didn't
+	if (err1 != nil) != (err2 != nil) {
+		if err1 != nil {
+			return err1
 		}
-		fmt.Println("[*] Initializing SQLite database with driver:", driver, "and SQL Version:",
-			res0, res1, res2)
+		return err2
 	}
-	db, err := sql.Open(driver, ":memory:")
-	if err != nil {
-		return nil, err
-	}
-	// NOTE it does NOT close the database connection
-	// defer db.Close()
-	if initSQL != "" {
-		_, err = db.Exec(initSQL)
-		if err != nil {
-			return nil, err
+
+	// Check if both crashed
+	if err1 != nil && err2 != nil {
+		if err2.Error() != err1.Error() {
+			// TODO: we might need a separator betwee old and new error
+			// if we want to do something specific if such an error occurs
+			return errors.Join(mismatchErrorErr, err1, err2)
 		}
+		return err2
 	}
-	return db, nil
+	return nil
 }
