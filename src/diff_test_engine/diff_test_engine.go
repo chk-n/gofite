@@ -8,12 +8,11 @@ sqlite_old_driver -> driver under test
 
 Exports:
 - CreateLogFile(fname string) (*os.File, error)
-- InitializeDB(driver string, initSQL string) (*sql.DB, error)
+- InitializeDB(driver string, initSQL string, debugMessage bool) (*sql.DB, error)
 - ExecAndCompareQuery(query string, db_old *sql.DB, db_new *sql.DB, logfile *os.File)
 - ExecAndCompareSQLErrors(sql string, db_old *sql.DB, db_new *sql.DB, logfile *os.File)
 - CompareDBStates(db_old *sql.DB, db_new *sql.DB, logfile *os.File)
 - DumpDB(db *sql.DB) (string, error)
-- Test()
 
 Algorithm:
 1. Initialize the database with a known state.
@@ -31,45 +30,9 @@ import (
 	"os"
 	"time"
 
-	sqlite_old_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_26_driver" // To be tested version
-	sqlite_new_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_new_driver"  // Verifying version
-	// "testing" // TODO: Investigate this package
+	sqlite_old_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_26_driver"   // To be tested version
+	sqlite_new_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_39_4_driver" // Verifying version
 )
-
-// Test execution, the source code of this function indicates how to use the engine.
-func Test() {
-	logfile, err := CreateLogFile("")
-	if err != nil {
-		fmt.Println("Error creating logfile:", err)
-		return
-	}
-	defer logfile.Close()
-
-	var initSQL = `
-		CREATE TABLE t(x INTEGER);
-		INSERT INTO t VALUES (1), (2), (3);
-	`
-	// Create and initialize the databases
-	db_new, err := InitializeDB("sqlite_new", initSQL)
-	if err != nil {
-		fmt.Println("Error initializing new database:", err)
-		return
-	}
-	defer db_new.Close()
-
-	db_old, err := InitializeDB("sqlite_old", initSQL)
-	if err != nil {
-		fmt.Println("Error initializing old database:", err)
-		return
-	}
-	defer db_old.Close()
-	// Run the same queries on both drivers
-	query := "SELECT * FROM t WHERE x > 1;"
-	ExecAndCompareQuery(query, db_old, db_new, logfile)
-	sql := "INSERT INTO t VALUES (21), (32), (13);"
-	ExecAndCompareSQLErrors(sql, db_old, db_new, logfile)
-	CompareDBStates(db_old, db_new, logfile)
-}
 
 // init	initializes old and new SQLite drivers, outputs versions
 func init() {
@@ -174,6 +137,11 @@ func ExecAndCompareQuery(query string, db_old *sql.DB, db_new *sql.DB, logfile *
 	}
 }
 
+// Only used for testing purposes
+func ExecSQLNoResult(db *sql.DB, sql string) error {
+	return execSQLNoResult(db, sql)
+}
+
 func execSQLNoResult(db *sql.DB, sql string) error {
 	_, err := db.Exec(sql)
 	if err != nil {
@@ -199,6 +167,11 @@ func extractResultToString(rows *sql.Rows) string {
 	return result
 }
 
+// Only used for testing purposes
+func ExecQueryWithResult(db *sql.DB, query string) (string, error) {
+	return execQueryWithResult(db, query)
+}
+
 func execQueryWithResult(db *sql.DB, query string) (string, error) {
 	rows, err := db.Query(query)
 	if err != nil {
@@ -219,7 +192,7 @@ func DumpDB(db *sql.DB) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	result += "\n"
+	result += "--\n"
 	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
 	if err != nil {
 		return "", err
@@ -279,7 +252,18 @@ func dumpTable(db *sql.DB, tableName string) (string, error) {
 // InitializeDB initializes a new SQLite database in memory and executes the provided SQL commands.
 // "driver" parameter can only be "sqlite_old" or "sqlite_new".
 // If initSQL is empty, it creates an empty database.
-func InitializeDB(driver string, initSQL string) (*sql.DB, error) {
+func InitializeDB(driver string, initSQL string, debugMessage bool) (*sql.DB, error) {
+	if debugMessage {
+		var res0, res2 string
+		var res1 int
+		if driver == "sqlite_old" {
+			res0, res1, res2 = sqlite_old_driver.Version()
+		} else {
+			res0, res1, res2 = sqlite_new_driver.Version()
+		}
+		fmt.Println("[*] Initializing SQLite database with driver:", driver, "and SQL Version:",
+			res0, res1, res2)
+	}
 	db, err := sql.Open(driver, ":memory:")
 	if err != nil {
 		return nil, err
