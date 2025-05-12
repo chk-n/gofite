@@ -12,9 +12,9 @@ import (
 
 var types = []schema.SqlType{
 	// NOTE HARRY: Temporary disable those to make results a bit simpler
-	// "REAL","NUMERIC", "DATE", "TIME", "DATETIME"
-	"INTEGER", "TEXT", "BLOB",
-	"BOOLEAN", "NULL",
+	// schema.NUMERIC, ...
+	schema.INT, schema.TEXT, schema.BLOB,
+	schema.BOOL, schema.NULL,
 }
 
 // TODO: maybe we can also generate random ALTER TABLE stmts
@@ -689,7 +689,7 @@ func generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 		return nil, errors.New("no references available")
 	}
 
-	if t == "" {
+	if t == 0 {
 		rel := randomPick(p.References())
 		cols := rel.Columns()
 		c := randomPick(cols)
@@ -745,34 +745,34 @@ func GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 	var value string
 
 	// select random type if not set
-	if t == "" {
+	if t == 0 {
 		t = randomPick(types)
 	}
 
 	// create random value for type
 	switch t {
-	case "INTEGER":
+	case schema.INT:
 		value = strconv.Itoa(d100())
-	case "REAL":
+	case schema.REAL:
 		value = fmt.Sprintf("%.2f", float64(rand.Intn(100))/float64(rand.Intn(10)+1))
-	case "TEXT":
+	case schema.TEXT:
 		value = fmt.Sprintf("'text%d'", d100())
-	case "BLOB":
+	case schema.BLOB:
 		value = fmt.Sprintf("X'%02x%02x%02x%02x'", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
-	case "NUMERIC":
+	case schema.NUMERIC:
 		// numeric can be integer or float
 		if d6() > 3 {
 			value = strconv.Itoa(d100())
 		} else {
 			value = fmt.Sprintf("%f", float64(rand.Intn(100))/float64(rand.Intn(10)+1))
 		}
-	case "BOOLEAN":
+	case schema.BOOL:
 		if d6() > 3 {
 			value = "TRUE"
 		} else {
 			value = "FALSE"
 		}
-	case "DATE":
+	case schema.DATE:
 		if d6() < 6 {
 			year := 2000 + rand.Intn(23)
 			month := 1 + rand.Intn(12)
@@ -781,7 +781,7 @@ func GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 		} else {
 			value = "CURRENT_DATE"
 		}
-	case "TIME":
+	case schema.TIME:
 		// NOTE HARRY: Remove CURRENT_TIME, CURRENT_TIMESTAMP to make diff test deterministic
 		// if d6() < 6 {
 		hour := rand.Intn(24)
@@ -791,7 +791,7 @@ func GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 		// } else {
 		// value = "CURRENT_TIME"
 		// }
-	case "DATETIME":
+	case schema.DATETIME:
 		// if d6() < 6 {
 		year := rand.Intn(9999)
 		month := 1 + rand.Intn(12)
@@ -882,7 +882,7 @@ func generateBooleanComparisonOperation(p ast.Prod) ast.BoolExpr {
 
 func generateNullPredicateExpression(p ast.Prod) ast.BoolExpr {
 	exp, err := retry(func() (ast.ValueExpr, error) {
-		return generateValueExpression(p, "")
+		return generateValueExpression(p, 0)
 	})
 	assert(err == nil, "expected no error")
 
@@ -906,10 +906,12 @@ func randomOperatorByType(t schema.SqlType) string {
 	commonOps := []string{"=", "<>"}
 
 	switch t {
-	case "INTEGER", "REAL", "NUMERIC", "DATE",
-		"TIME", "DATETIME", "TEXT", "BLOB":
+	case schema.INT, schema.REAL,
+		schema.NUMERIC, schema.DATE,
+		schema.TIME, schema.DATETIME,
+		schema.TEXT, schema.BLOB:
 		return randomPick(append(commonOps, "<", ">", "<=", ">="))
-	case "BOOLEAN":
+	case schema.BOOL:
 		return randomPick(commonOps)
 	default:
 		return randomPick(commonOps)
@@ -973,7 +975,7 @@ func generateCastExpression(p ast.Prod, constraint schema.SqlType) (*ast.CastExp
 	}
 
 	sourceExpr, err := retry(func() (ast.ValueExpr, error) {
-		return generateValueExpression(expr, "")
+		return generateValueExpression(expr, 0)
 	})
 	assert(err == nil, "expected no error")
 	expr.Expr = sourceExpr
@@ -982,7 +984,7 @@ pick:
 	// NOTE: this might not always yield
 	// a correct cast
 	expr.Typ = randomPick(types)
-	if expr.Typ == "NULL" {
+	if expr.Typ == schema.NULL {
 		goto pick
 	}
 
@@ -997,7 +999,7 @@ func generateCoalesceExpression(p ast.Prod, constraint schema.SqlType) (*ast.Coa
 	numExprs := 2 + rand.Intn(5)
 	expr.Exprs = make([]ast.ValueExpr, numExprs)
 
-	types := []schema.SqlType{constraint, "", "NULL"}
+	types := []schema.SqlType{constraint, 0, schema.NULL}
 	var err error
 	for i := range numExprs {
 		expr.Exprs[i], err = retry(func() (ast.ValueExpr, error) {
@@ -1029,7 +1031,7 @@ func generateIfNullIfExpression(p ast.Prod, constraint schema.SqlType) (*ast.IfN
 	}
 
 	expr.Typ = constraint
-	if constraint == "" {
+	if constraint == 0 {
 		expr.Typ = expr.Expr1.Type()
 	}
 
@@ -1098,7 +1100,7 @@ func generateFunctionCallExpression(p ast.Prod, constraint schema.SqlType, aggre
 	// math or datetime
 	proc := randomPick(schema.BuiltInFunctions)
 	args := generateFunctionArguments(p, proc.ArgTypes)
-	if constraint != "" && proc.RetType != constraint {
+	if constraint != 0 && proc.RetType != constraint {
 		return nil, errors.New("no matching constraint found")
 	}
 
@@ -1119,7 +1121,7 @@ func generateAggregateCallExpression(p ast.Prod, constraint schema.SqlType) (*as
 	}
 
 	proc := randomPick(p.Schema().Aggregates)
-	if constraint != "" && proc.RetType != constraint {
+	if constraint != 0 && proc.RetType != constraint {
 		return nil, errors.New("no matching constraint found")
 	}
 
@@ -1157,29 +1159,29 @@ func generateFunctionArguments(p ast.Prod, argTypes []schema.SqlType) []ast.Valu
 	for range i {
 		at := argTypes[j]
 		switch at {
-		case "MULTI":
+		case schema.MULTI:
 			// generate random number of additional
 			// arguments
 			i += rand.Intn(100)
-		case "TIMEVALUE":
+		case schema.TIMEVALUE:
 			val, tVal := generateDatetimeValue()
 			tValue = tVal
-			vals = append(vals, ast.NewConstant(p, val, "TEXT"))
-		case "TIMEMODIFIER":
+			vals = append(vals, ast.NewConstant(p, val, schema.TEXT))
+		case schema.TIMEMODIFIER:
 			// as timevalues always precede modifiers
 			// we just get last time value
 			assert(tValue != "", "expected tValue to be set")
 			mod := generateDatetimeModifier(tValue)
-			vals = append(vals, ast.NewConstant(p, mod, "TEXT"))
-		case "RUNE":
+			vals = append(vals, ast.NewConstant(p, mod, schema.TEXT))
+		case schema.RUNE:
 			vals = append(vals, generateUnicode(p))
-		case "ANY":
-			vals = append(vals, GenerateConstantExpression(p, ""))
-		case "REAL01":
+		case schema.ANY:
+			vals = append(vals, GenerateConstantExpression(p, 0))
+		case schema.REAL01:
 			// altjhough 1.0 not included this should
 			// be fine
 			r := fmt.Sprintf("%f", rand.Float32())
-			vals = append(vals, ast.NewConstant(p, r, "REAL"))
+			vals = append(vals, ast.NewConstant(p, r, schema.REAL))
 		default:
 			vals = append(vals, GenerateConstantExpression(p, at))
 		}
@@ -1345,7 +1347,7 @@ func generateUnicode(p ast.Prod) ast.ValueExpr {
 		if cp >= 0xD800 && cp <= 0xDFFF {
 			continue
 		}
-		return ast.NewConstant(p, "'"+string(cp)+"'", "TEXT")
+		return ast.NewConstant(p, "'"+string(cp)+"'", schema.TEXT)
 	}
 }
 

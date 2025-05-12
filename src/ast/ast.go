@@ -730,7 +730,7 @@ func (c *BinaryExpr) Out() string {
 }
 
 func (c *BinaryExpr) Type() schema.SqlType {
-	return "BOOLEAN"
+	return schema.BOOL
 }
 
 type ExistsExpr struct {
@@ -748,7 +748,7 @@ func (e *ExistsExpr) Out() string {
 	return buf.String()
 }
 func (e *ExistsExpr) Type() schema.SqlType {
-	return "BOOLEAN"
+	return schema.BOOL
 }
 
 type TruthExpr struct {
@@ -764,7 +764,7 @@ func (e *TruthExpr) Out() string {
 }
 
 func (e *TruthExpr) Type() schema.SqlType {
-	return "BOOLEAN"
+	return schema.BOOL
 }
 
 type NullPredicateExpr struct {
@@ -785,7 +785,7 @@ func (e *NullPredicateExpr) Out() string {
 }
 
 func (e *NullPredicateExpr) Type() schema.SqlType {
-	return "BOOLEAN"
+	return schema.BOOL
 }
 
 type FunCallExpr struct {
@@ -904,7 +904,7 @@ type CastExpr struct {
 }
 
 func (c *CastExpr) Out() string {
-	return fmt.Sprintf("CAST(%s AS %s)", c.Expr.Out(), c.Typ)
+	return fmt.Sprintf("CAST(%s AS %s)", c.Expr.Out(), c.Typ.Out())
 }
 
 func (c *CastExpr) Type() schema.SqlType {
@@ -932,11 +932,11 @@ func (e *CoalesceExpr) Out() string {
 
 func (e *CoalesceExpr) Type() schema.SqlType {
 	for _, e := range e.Exprs {
-		if e.Type() != "NULL" {
+		if e.Type() != schema.NULL {
 			return e.Type()
 		}
 	}
-	return "NULL"
+	return schema.NULL
 }
 
 type IfNullIfExpr struct {
