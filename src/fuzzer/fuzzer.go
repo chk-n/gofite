@@ -111,11 +111,8 @@ func New(cfg *Config) *Fuzzer {
 }
 
 func (f *Fuzzer) Fuzz() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	f.ctx = ctx
 	f.startTime = time.Now()
+	f.ctx = context.Background()
 
 	enoughCPU := runtime.NumCPU() >= 4
 	if !enoughCPU {
@@ -143,7 +140,10 @@ func (f *Fuzzer) Fuzz() {
 		go f.run()
 	}
 
-	<-ctx.Done()
+	// block forever
+	select {}
+}
+
 // Report statistics on queries per second
 func (f *Fuzzer) reportStats() {
 	ticker := time.NewTicker(1 * time.Second)
