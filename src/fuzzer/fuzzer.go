@@ -60,7 +60,7 @@ type Fuzzer struct {
 	// batch size from config
 	batchSize uint
 	// global program coverage
-	coverage atomic.Pointer[Coverage]
+	coverage *Coverage
 	ctx      context.Context
 	// TODO: define corpus data structure
 	corpus []ast.Prod
@@ -71,7 +71,9 @@ type Fuzzer struct {
 
 	startTime  time.Time
 	queriesCnt atomic.Int64
+
 	pool sync.Pool
+	mu   sync.RWMutex
 
 	log *slog.Logger
 }
@@ -89,6 +91,7 @@ func New(cfg *Config) *Fuzzer {
 		outDir:    cfg.OutDir,
 		batches:   make(chan *Batch, 50_000), // TODO: empirically determine channel size
 		crash:     make(chan *Batch, 1_000),  // TODO: empirically determine channel size
+		coverage:  NewCoverage(),
 		pool: sync.Pool{
 			New: func() any {
 				return strings.Builder{}
@@ -96,8 +99,6 @@ func New(cfg *Config) *Fuzzer {
 		},
 		log: slog.New(slog.NewTextHandler(os.Stdout, opts)),
 	}
-	cov := NewCoverage()
-	f.coverage.Store(cov)
 
 	if cfg.Debug {
 		f.log.Debug("[*] Initializing SQLite Differential Testing Engine")
@@ -122,7 +123,9 @@ func (f *Fuzzer) Fuzz() {
 	f.log.Debug("starting seed corpus generation")
 	// start sql query generator
 	go f.seedCorpus()
+	go f.seedCorpus()
 
+	go f.reportStats()
 	// ratio between mutation vs execution is 1:4 // TODO: empirically determine ratio
 	// mutateCPU := runtime.NumCPU() / 4
 	// for range mutateCPU {
@@ -135,8 +138,8 @@ func (f *Fuzzer) Fuzz() {
 	go f.minimise()
 
 	f.log.Debug("starting f.run")
-	runCPU := (runtime.NumCPU() / 4) * 3
-	for range runCPU {
+	// runCPU := (runtime.NumCPU() / 4) * 3
+	for range 4 {
 		go f.run()
 	}
 
@@ -170,7 +173,7 @@ func (f *Fuzzer) reportStats() {
 // for corpus
 func (f *Fuzzer) seedCorpus() {
 	g := generator.New(&generator.Config{})
-	for range 100_000 {
+	for {
 		stmts := g.NextBatchUID(f.batchSize)
 		b := NewBatch(stmts[0].Schema().Out(), stmts)
 		select {
@@ -185,12 +188,13 @@ func (f *Fuzzer) seedCorpus() {
 // runs on one thread executing batches sequentially
 func (f *Fuzzer) run() {
 	for {
-		b := <-f.batches
+		b, _ := <-f.batches
+
 		f.queriesCnt.Add(int64(f.batchSize))
 
 		// TODO: implement coverage
 		// initialise new coverage bitmap
-		// cov := NewCoverage()
+		cov := NewCoverage()
 
 		out := f.pool.Get().(strings.Builder)
 		sql := b.String(out)
@@ -229,31 +233,25 @@ func (f *Fuzzer) run() {
 		dte.Close()
 		f.pool.Put(out)
 
-		// cov.Collect()
+		cov.Collect()
 
-		// 	cnt := 0
-		// retry:
-		// 	if cnt > 5 {
-		// 		f.log.Error("retry limit reached: too much contention updating global coverage")
-		// 		continue
-		// 	}
+		// check if new coverage discovered and update global
+		// coverage with new coverage atomically
+		// NOTE: perhaps it is more performant to write lock
+		// directly instead of first read locking. Depends how
+		// many new statements are discovered
+		f.mu.RLock()
+		if !cov.Compare(f.coverage) {
+			continue
+		}
+		f.mu.RUnlock()
 
-		// 	old := f.coverage.Load()
+		f.mu.Lock()
+		f.coverage = cov.Copy(f.coverage)
+		f.mu.Unlock()
 
-		// 	// check if new coverage discovered
-		// 	if !cov.Compare(old) {
-		// 		continue
-		// 	}
-		// 	// update global coverage with new coverage atomically
-		// 	upd := cov.Copy(old)
-		// 	if !f.coverage.CompareAndSwap(old, upd) {
-		// 		// if there was a conflict we wait a bit and retry
-		// 		wait := time.Microsecond * time.Duration(1<<cnt) * time.Duration(rand.IntN(10))
-		// 		time.Sleep(wait)
-		// 		goto retry
-		// 	}
-
-		// TODO: send batch to be minimised or integrated with corpus
+		f.log.Debug("new coverage found!")
+		f.log.Debug(f.coverage.Visualize())
 	}
 }
 
@@ -270,7 +268,7 @@ func (f *Fuzzer) mutate() {
 // caused the crash
 func (f *Fuzzer) minimise() {
 	for {
-		bs := <-f.crash
+		bs, _ := <-f.crash
 		n := bs.Len()
 
 		if n == 0 {
