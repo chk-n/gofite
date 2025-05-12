@@ -56,7 +56,7 @@ func (b *Base) Level() int {
 }
 
 func (b *Base) Indent() string {
-	s := "\n"
+	s := ""
 	for range b.level {
 		s = s + " "
 	}
@@ -362,13 +362,12 @@ func (s *CTEStmt) Out() string {
 	for i, q := range s.WithQueries {
 		buf.WriteString(s.Indent())
 		buf.WriteString(s.Refs[i])
-		buf.WriteString(" AS (")
+		buf.WriteString(" AS (\n")
 		buf.WriteString(q.Out())
-		buf.WriteString(")")
+		buf.WriteString("\n)")
 		if i+1 != len(s.WithQueries) {
 			buf.WriteString(", ")
 		}
-		buf.WriteString(s.Indent())
 	}
 	buf.WriteString(s.Query.Out())
 	return buf.String()
@@ -426,13 +425,13 @@ func (s *SelectStmt) Out() string {
 		buf.WriteString(s.SetQuantifier + " ")
 	}
 	buf.WriteString(s.SelectClause.Out())
-	buf.WriteString(s.Base.Indent())
+	buf.WriteString("\n" + s.Base.Indent())
 	buf.WriteString(s.FromClause.Out())
-	buf.WriteString(s.Base.Indent())
+	buf.WriteString("\n" + s.Base.Indent())
 	buf.WriteString("WHERE ")
 	buf.WriteString(s.WhereClause.Out())
 	if s.LimitClause != "" {
-		buf.WriteString("\n")
+		buf.WriteString("\n" + s.Base.Indent())
 		buf.WriteString(s.LimitClause)
 	}
 	return buf.String()
@@ -658,7 +657,6 @@ func (t *TableSubquery) Out() string {
 	buf.WriteString(t.Query.Out())
 	buf.WriteString(") as ")
 	buf.WriteString(t.Scope.Refs[0].Name())
-	buf.WriteString(t.Indent())
 	return buf.String()
 }
 
@@ -742,9 +740,11 @@ type ExistsExpr struct {
 
 func (e *ExistsExpr) Out() string {
 	var buf strings.Builder
-	buf.WriteString("EXISTS (")
+	buf.WriteString("EXISTS (\n")
 	buf.WriteString(e.Base.Indent())
-	buf.WriteString(e.Subquery.Out() + ")")
+	buf.WriteString(e.Subquery.Out())
+	buf.WriteString("\n")
+	buf.WriteString(e.Base.Indent() + ")")
 	return buf.String()
 }
 func (e *ExistsExpr) Type() schema.SqlType {
@@ -808,7 +808,6 @@ func (e *FunCallExpr) Out() string {
 		buf.WriteString(e.Params[0].Out())
 	} else {
 		for i, p := range e.Params {
-			buf.WriteString(e.Indent())
 			// NOTE: they do a cast here idk if necessary
 			buf.WriteString(p.Out())
 			if i+1 != len(e.Params) {
@@ -870,7 +869,7 @@ type CaseExpr struct {
 func (e *CaseExpr) Out() string {
 	var buf strings.Builder
 
-	buf.WriteString(e.Indent())
+	buf.WriteString("\n" + e.Indent())
 	buf.WriteString("CASE")
 	if e.Val != nil {
 		buf.WriteString(" " + e.Val.Out())
@@ -992,21 +991,23 @@ func (j *JoinedTable) Out() string {
 	var buf strings.Builder
 
 	buf.WriteString(j.Lhs.Out())
-	buf.WriteString(j.Indent())
+	buf.WriteString("\n" + j.Indent())
 	buf.WriteString(j.Type + " JOIN ")
 	if nested, isNestedJoin := j.Rhs.(*JoinedTable); isNestedJoin {
 		// Add parentheses around nested joins
-		buf.WriteString("(")
+		buf.WriteString("(\n")
 		buf.WriteString(j.Indent())
 		buf.WriteString(nested.Out())
 		buf.WriteString(j.Indent())
-		buf.WriteString(")")
+		buf.WriteString(")\n")
 	} else {
 		buf.WriteString(j.Rhs.Out())
 		buf.WriteString(j.Indent())
+		buf.WriteString("\n")
 	}
 
 	if j.Condition != nil {
+		buf.WriteString(j.Indent())
 		buf.WriteString(" ON (" + j.Condition.Out() + ")")
 	}
 

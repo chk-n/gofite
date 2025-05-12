@@ -45,7 +45,7 @@ func (b *Batch) CrashString(out strings.Builder) string {
 	out.WriteString("/* -----------Error-----------\n" + b.err.Error() + "-----------/Error----------- */\n")
 	out.WriteString(sch + "\n")
 	for _, s := range b.stmts {
-		out.WriteString(s.Out() + "\n;")
+		out.WriteString(s.Out() + ";\n")
 	}
 	return out.String()
 }
