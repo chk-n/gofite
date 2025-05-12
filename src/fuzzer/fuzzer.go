@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cnordg/ast-group-project/src/ast"
 	"github.com/cnordg/ast-group-project/src/diff_test_engine"
@@ -74,6 +75,12 @@ type Fuzzer struct {
 }
 
 func New(cfg *Config) *Fuzzer {
+	opts := &slog.HandlerOptions{}
+	if cfg.Debug {
+		opts = &slog.HandlerOptions{
+			Level: slog.LevelDebug, // Explicitly set the level
+		}
+	}
 	// TODO: set config Threads
 	f := &Fuzzer{
 		batchSize: cfg.BatchSize,
@@ -85,7 +92,7 @@ func New(cfg *Config) *Fuzzer {
 				return strings.Builder{}
 			},
 		},
-		log: slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		log: slog.New(slog.NewTextHandler(os.Stdout, opts)),
 	}
 	cov := NewCoverage()
 	f.coverage.Store(cov)
@@ -127,6 +134,7 @@ func (f *Fuzzer) Fuzz() {
 	f.log.Debug("starting minimisation")
 	go f.minimise()
 
+	f.log.Debug("starting f.run")
 	runCPU := (runtime.NumCPU() / 4) * 3
 	for range runCPU {
 		go f.run()
@@ -142,7 +150,7 @@ func (f *Fuzzer) Fuzz() {
 func (f *Fuzzer) seedCorpus() {
 	g := generator.New(&generator.Config{})
 	for range 100_000 {
-		stmts := g.NextBatch(f.batchSize)
+		stmts := g.NextBatchUID(f.batchSize)
 		b := NewBatch(stmts[0].Schema().Out(), stmts)
 		select {
 		case f.batches <- b:
@@ -170,6 +178,7 @@ func (f *Fuzzer) run() {
 
 		if err := dte.ExecAndCompareSQLErrors(sql); err != nil {
 			f.log.Info("crash detected!")
+			b.err = err
 			select {
 			case f.crash <- b:
 			default:
@@ -180,6 +189,21 @@ func (f *Fuzzer) run() {
 				continue
 			}
 		}
+		if err := dte.CompareDBStates(); err != nil {
+			f.log.Info("mismatch detected in compareDB!")
+			// fmt.Println("DEBUG (raw):", err.Error())
+			b.err = err
+			select {
+			case f.crash <- b:
+			default:
+				dte.Close()
+				// NOTE: idk if we first need to reset 'out' or not
+				f.pool.Put(out)
+				f.log.Error("crash channel full. ignoring batch")
+				continue
+			}
+		}
+
 		dte.Close()
 		f.pool.Put(out)
 
@@ -237,10 +261,11 @@ func (f *Fuzzer) minimise() {
 		defer f.pool.Put(out)
 
 		// save to disk
-		sql := b.String(out)
+		sql := b.CrashString(out)
 		h := fnv.New64a()
+		now := time.Now().UnixMilli()
 		h.Write([]byte(sql))
-		filePath := f.outDir + fmt.Sprintf("/crash-%d.sql", h.Sum64())
+		filePath := f.outDir + fmt.Sprintf("/crash-%d-%d.sql", now, h.Sum64())
 		if err := os.WriteFile(filePath, []byte(sql), 0644); err != nil {
 			f.log.Error("failed to write crash file", slog.String("error", err.Error()))
 		}
