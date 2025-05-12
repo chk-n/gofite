@@ -10,6 +10,8 @@ import (
 	"github.com/cnordg/ast-group-project/src/schema"
 )
 
+var debug = false
+
 var types = []schema.SqlType{
 	// NOTE HARRY: Temporary disable those to make results a bit simpler
 	// schema.NUMERIC, ...
@@ -1372,7 +1374,7 @@ retry:
 }
 
 func assert(b bool, rsn string) {
-	if !b {
+	if debug && !b {
 		panic(rsn)
 	}
 }

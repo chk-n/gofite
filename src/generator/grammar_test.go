@@ -20,6 +20,7 @@ import (
 func TestSelectGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 100
 	for range nIter {
 		sch := generateTable(1)
@@ -51,6 +52,7 @@ func TestSelectGeneration(t *testing.T) {
 func TestCTEGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	var buf bytes.Buffer
 	cmd := exec.Command("./sqlite3-3.26.0", "-interactive", ":memory:")
 	in, _ := cmd.StdinPipe()
@@ -91,6 +93,7 @@ func TestCTEGeneration(t *testing.T) {
 func TestInsertGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 500
 	for range nIter {
 		sch := generateTable(1)
@@ -121,6 +124,7 @@ func TestInsertGeneration(t *testing.T) {
 func TestUpdateGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 500
 	for range nIter {
 
@@ -152,6 +156,7 @@ func TestUpdateGeneration(t *testing.T) {
 func TestDeleteGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 500
 	for range nIter {
 		sch := generateTable(1)
@@ -182,6 +187,7 @@ func TestDeleteGeneration(t *testing.T) {
 func TestExplainGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 10
 	for range nIter {
 		sch := generateTable(1)
@@ -213,6 +219,7 @@ func TestExplainGeneration(t *testing.T) {
 func TestAnalyseGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 10
 	for range nIter {
 		sch := generateTable(1)
@@ -244,6 +251,7 @@ func TestAnalyseGeneration(t *testing.T) {
 func TestVacuumGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 1000
 	for range nIter {
 		sch := generateTable(1)
@@ -271,6 +279,7 @@ func TestVacuumGeneration(t *testing.T) {
 func TestCompoundGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 100
 	for range nIter {
 		sch := generateTable(1)
@@ -302,6 +311,7 @@ func TestCompoundGeneration(t *testing.T) {
 func TestSavepointGeneration(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 100
 	for range nIter {
 		sch := generateTable(1)
@@ -333,6 +343,7 @@ func TestSavepointGeneration(t *testing.T) {
 func TestCreateView(t *testing.T) {
 	t.Parallel()
 
+	debug = true
 	nIter := 100
 	for range nIter {
 		sch := generateTable(1)
