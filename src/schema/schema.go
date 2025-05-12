@@ -266,7 +266,8 @@ var BuiltInFunctions = []*Routine{
 	// any random behaviour.
 	// {Name: "random", Schema: "", ArgTypes: []SqlType{}, RetType: "INTEGER"},
 	// {Name: "randomblob", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "BLOB"},
-	{Name: "sqlite_compileoption_get", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "TEXT"},
+	// NOTE HARRY : Disabled to make deterministic
+	// {Name: "sqlite_compileoption_get", Schema: "", ArgTypes: []SqlType{"INTEGER"}, RetType: "TEXT"},
 	// NOTE: if we enable this we need to keep a list of
 	// compile time option strings
 	// {Name: "sqlite_compileoption_used", Schema: "", ArgTypes: []SqlType{"TEXT"}, RetType: "INTEGER"},
@@ -322,20 +323,22 @@ var BuiltInFunctions = []*Routine{
 	// Datetime functions //
 	// ------------------ //
 
-	{Name: "date", Schema: "", ArgTypes: []SqlType{}, RetType: "TEXT"},                                     // Current date
-	{Name: "date", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "TEXT"}, // With time value
-	{Name: "time", Schema: "", ArgTypes: []SqlType{}, RetType: "TEXT"},
-	{Name: "time", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "TEXT"},
-	{Name: "datetime", Schema: "", ArgTypes: []SqlType{}, RetType: "TEXT"},
-	{Name: "datetime", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "TEXT"},
-	{Name: "julianday", Schema: "", ArgTypes: []SqlType{}, RetType: "REAL"},
-	{Name: "julianday", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "REAL"},
-	// {Name: "unixepoch", Schema: "", ArgTypes: []SqlType{}, RetType: "INTEGER"},
-	// {Name: "unixepoch", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "INTEGER"},
-	// {Name: "strftime", Schema: "", ArgTypes: []SqlType{"TEXT"}, RetType: "TEXT"},                                       // Format string only
-	{Name: "strftime", Schema: "", ArgTypes: []SqlType{"TEXT", "TIMEVALUE"}, RetType: "TEXT"},                          // With time value
-	{Name: "strftime", Schema: "", ArgTypes: []SqlType{"TEXT", "TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "TEXT"}, // Multiple modifiers
-	// {Name: "timediff", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "TIMEVALUE"}, RetType: "TEXT"},
+	// NOTE HARRY : Disabled to make deterministic
+
+	// {Name: "date", Schema: "", ArgTypes: []SqlType{}, RetType: "TEXT"},                                     // Current date
+	// {Name: "date", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "TEXT"}, // With time value
+	// {Name: "time", Schema: "", ArgTypes: []SqlType{}, RetType: "TEXT"},
+	// {Name: "time", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "TEXT"},
+	// {Name: "datetime", Schema: "", ArgTypes: []SqlType{}, RetType: "TEXT"},
+	// {Name: "datetime", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "TEXT"},
+	// {Name: "julianday", Schema: "", ArgTypes: []SqlType{}, RetType: "REAL"},
+	// {Name: "julianday", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "REAL"},
+	// // {Name: "unixepoch", Schema: "", ArgTypes: []SqlType{}, RetType: "INTEGER"},
+	// // {Name: "unixepoch", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "INTEGER"},
+	// // {Name: "strftime", Schema: "", ArgTypes: []SqlType{"TEXT"}, RetType: "TEXT"},                                       // Format string only
+	// {Name: "strftime", Schema: "", ArgTypes: []SqlType{"TEXT", "TIMEVALUE"}, RetType: "TEXT"},                          // With time value
+	// {Name: "strftime", Schema: "", ArgTypes: []SqlType{"TEXT", "TIMEVALUE", "MULTI", "TIMEMODIFIER"}, RetType: "TEXT"}, // Multiple modifiers
+	// // {Name: "timediff", Schema: "", ArgTypes: []SqlType{"TIMEVALUE", "TIMEVALUE"}, RetType: "TEXT"},
 }
 
 var DatetimeTimeValues = []string{
