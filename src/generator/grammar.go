@@ -11,8 +11,10 @@ import (
 )
 
 var types = []schema.SqlType{
-	"INTEGER", "REAL", "TEXT", "BLOB", "NUMERIC",
-	"BOOLEAN", "DATE", "TIME", "DATETIME", "NULL",
+	// NOTE HARRY: Temporary disable those to make results a bit simpler
+	// "REAL","NUMERIC", "DATE", "TIME", "DATETIME"
+	"INTEGER", "TEXT", "BLOB",
+	"BOOLEAN", "NULL",
 }
 
 // TODO: maybe we can also generate random ALTER TABLE stmts
@@ -40,7 +42,7 @@ func generateTable(num int) *schema.Schema {
 
 			cols[i] = col
 			if d6() == 1 {
-				v := generateConstantExpression(dummy, col.Typ)
+				v := GenerateConstantExpression(dummy, col.Typ)
 				defaults = append(defaults, v.Out())
 			}
 		}
@@ -119,6 +121,24 @@ start:
 
 	return view
 
+}
+
+func GenerateIUD(p ast.Prod, s *ast.Scope) ast.Prod {
+	if d6() < 4 { // 50%
+		return GenerateInsert(p, s)
+	} else if d6() < 6 { // 25%
+		return GenerateUpdate(p, s)
+	}
+
+	// if d6() == 6 { // 25%
+	return GenerateDelete(p, s)
+}
+
+func GenerateSelectOrCTE(p ast.Prod, s *ast.Scope) ast.Prod {
+	if d42() < 2 {
+		return GenerateCTE(p, s)
+	}
+	return GenerateSelect(p, s)
 }
 
 func GenerateStatement(p ast.Prod, s *ast.Scope) ast.Prod {
@@ -716,12 +736,12 @@ func generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 		return generateColumnReference(p, t)
 	}
 
-	return generateConstantExpression(p, t), nil
+	return GenerateConstantExpression(p, t), nil
 }
 
 // creates a constant expression based on t or existing sqlite types
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L195
-func generateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
+func GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 	var value string
 
 	// select random type if not set
@@ -734,7 +754,7 @@ func generateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 	case "INTEGER":
 		value = strconv.Itoa(d100())
 	case "REAL":
-		value = fmt.Sprintf("%f", float64(rand.Intn(100))/float64(rand.Intn(10)+1))
+		value = fmt.Sprintf("%.2f", float64(rand.Intn(100))/float64(rand.Intn(10)+1))
 	case "TEXT":
 		value = fmt.Sprintf("'text%d'", d100())
 	case "BLOB":
@@ -762,26 +782,27 @@ func generateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 			value = "CURRENT_DATE"
 		}
 	case "TIME":
-		if d6() < 6 {
-			hour := rand.Intn(24)
-			minute := rand.Intn(60)
-			second := rand.Intn(60)
-			value = fmt.Sprintf("'%02d:%02d:%02d'", hour, minute, second)
-		} else {
-			value = "CURRENT_TIME"
-		}
+		// NOTE HARRY: Remove CURRENT_TIME, CURRENT_TIMESTAMP to make diff test deterministic
+		// if d6() < 6 {
+		hour := rand.Intn(24)
+		minute := rand.Intn(60)
+		second := rand.Intn(60)
+		value = fmt.Sprintf("'%02d:%02d:%02d'", hour, minute, second)
+		// } else {
+		// value = "CURRENT_TIME"
+		// }
 	case "DATETIME":
-		if d6() < 6 {
-			year := rand.Intn(9999)
-			month := 1 + rand.Intn(12)
-			day := 1 + rand.Intn(28)
-			hour := rand.Intn(24)
-			minute := rand.Intn(60)
-			second := rand.Intn(60)
-			value = fmt.Sprintf("'%04d-%02d-%02d %02d:%02d:%02d'", year, month, day, hour, minute, second)
-		} else {
-			value = "CURRENT_TIMESTAMP"
-		}
+		// if d6() < 6 {
+		year := rand.Intn(9999)
+		month := 1 + rand.Intn(12)
+		day := 1 + rand.Intn(28)
+		hour := rand.Intn(24)
+		minute := rand.Intn(60)
+		second := rand.Intn(60)
+		value = fmt.Sprintf("'%04d-%02d-%02d %02d:%02d:%02d'", year, month, day, hour, minute, second)
+		// } else {
+		// value = "CURRENT_TIMESTAMP"
+		// }
 	default:
 		value = "NULL"
 	}
@@ -1153,14 +1174,14 @@ func generateFunctionArguments(p ast.Prod, argTypes []schema.SqlType) []ast.Valu
 		case "RUNE":
 			vals = append(vals, generateUnicode(p))
 		case "ANY":
-			vals = append(vals, generateConstantExpression(p, ""))
+			vals = append(vals, GenerateConstantExpression(p, ""))
 		case "REAL01":
 			// altjhough 1.0 not included this should
 			// be fine
 			r := fmt.Sprintf("%f", rand.Float32())
 			vals = append(vals, ast.NewConstant(p, r, "REAL"))
 		default:
-			vals = append(vals, generateConstantExpression(p, at))
+			vals = append(vals, GenerateConstantExpression(p, at))
 		}
 		if j < len(argTypes) {
 			j++
