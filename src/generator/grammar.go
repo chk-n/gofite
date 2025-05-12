@@ -96,9 +96,10 @@ func GenerateView(p ast.Prod, s *ast.Scope) ast.Prod {
 	}
 
 	// at least one column in view
+	types := view.AvailableTypes()
 start:
 	col, err := retry(func() (ast.ValueExpr, error) {
-		typ := randomPick(view.AvailableTypes())
+		typ := randomPick(types)
 		// modified version of generateColumnReference
 		// as views cant have table qualified names
 		// e.g. (t0.c1)
@@ -460,8 +461,9 @@ func generateSelectClause(p ast.Prod) *ast.SelectClause {
 	}
 
 	// add at least one column
+	types := p.AvailableTypes()
 start:
-	typ := randomPick(p.AvailableTypes())
+	typ := randomPick(types)
 	expr, err := retry(func() (ast.ValueExpr, error) {
 		return generateValueExpression(p, typ)
 	})
