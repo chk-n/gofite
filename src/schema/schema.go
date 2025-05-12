@@ -158,7 +158,7 @@ type Routine struct {
 	RetType  SqlType
 }
 
-func (r *Routine) Indent() string {
+func (r *Routine) Ident() string {
 	if r.Schema != "" {
 		return r.Schema + "." + r.Name
 	}

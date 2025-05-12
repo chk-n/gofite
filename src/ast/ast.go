@@ -799,7 +799,7 @@ type FunCallExpr struct {
 
 func (e *FunCallExpr) Out() string {
 	var buf strings.Builder
-	buf.WriteString(e.Proc.Indent())
+	buf.WriteString(e.Proc.Ident())
 	buf.WriteString("(")
 	if e.IsAggregate && len(e.Params) == 0 {
 		buf.WriteString("*")
