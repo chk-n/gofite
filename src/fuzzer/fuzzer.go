@@ -69,6 +69,8 @@ type Fuzzer struct {
 	// queries that caused an error
 	crash chan *Batch
 
+	startTime  time.Time
+	queriesCnt atomic.Int64
 	pool sync.Pool
 
 	log *slog.Logger
@@ -113,6 +115,7 @@ func (f *Fuzzer) Fuzz() {
 	defer cancel()
 
 	f.ctx = ctx
+	f.startTime = time.Now()
 
 	enoughCPU := runtime.NumCPU() >= 4
 	if !enoughCPU {
@@ -141,7 +144,25 @@ func (f *Fuzzer) Fuzz() {
 	}
 
 	<-ctx.Done()
+// Report statistics on queries per second
+func (f *Fuzzer) reportStats() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 
+	for {
+		select {
+		case <-ticker.C:
+			elapsed := time.Since(f.startTime).Seconds()
+			queries := f.queriesCnt.Load()
+			qps := float64(queries) / elapsed
+
+			f.log.Info(fmt.Sprintf("N: %d, Elapsed: %.2fs, QPS: %.2f",
+				queries, elapsed, qps))
+
+		case <-f.ctx.Done():
+			return
+		}
+	}
 }
 
 // generate an initial number of random sql queries
@@ -165,6 +186,7 @@ func (f *Fuzzer) seedCorpus() {
 func (f *Fuzzer) run() {
 	for {
 		b := <-f.batches
+		f.queriesCnt.Add(int64(f.batchSize))
 
 		// TODO: implement coverage
 		// initialise new coverage bitmap
