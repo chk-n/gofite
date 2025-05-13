@@ -1,9 +1,7 @@
 package fuzzer
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../include
-#cgo LDFLAGS: -L${SRCDIR}/../../lib -linstrument -ldl
-#include "instrument.c"
+#include "../../include/instrument.c"
 */
 import "C"
 import (
