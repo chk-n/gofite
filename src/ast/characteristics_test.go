@@ -28,6 +28,4 @@ func TestCharacteristicsVisitor(t *testing.T) {
 
 	fmt.Printf("Clause Counts: %v\n", visitor.ClauseCounts)
 	fmt.Printf("Max Depth: %d\n", visitor.MaxDepth)
-
-	t.Fail()
 }
