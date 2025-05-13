@@ -21,9 +21,9 @@ var types = []schema.SqlType{
 
 // TODO: maybe we can also generate random ALTER TABLE stmts
 
-// generateTable takes number of tables and an empty scope
+// GenerateTable takes number of tables and an empty scope
 // and generates 'num' tables and populates scope
-func generateTable(num int) *schema.Schema {
+func GenerateTable(num int) *schema.Schema {
 	schm := &schema.Schema{}
 
 	for i := range num {

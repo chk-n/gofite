@@ -23,7 +23,7 @@ func TestSelectGeneration(t *testing.T) {
 	debug = true
 	nIter := 100
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -64,7 +64,7 @@ func TestCTEGeneration(t *testing.T) {
 	nIter := 500
 	for range nIter {
 
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n"
 		in.Write([]byte(schemaSql))
 		// generate queries
@@ -96,7 +96,7 @@ func TestInsertGeneration(t *testing.T) {
 	debug = true
 	nIter := 500
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n"
 		// generate queries
 		nQueries := 100
@@ -128,7 +128,7 @@ func TestUpdateGeneration(t *testing.T) {
 	nIter := 500
 	for range nIter {
 
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n"
 		// generate queries
 		nQueries := 100
@@ -159,7 +159,7 @@ func TestDeleteGeneration(t *testing.T) {
 	debug = true
 	nIter := 500
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n"
 		// generate queries
 		nQueries := 100
@@ -190,7 +190,7 @@ func TestExplainGeneration(t *testing.T) {
 	debug = true
 	nIter := 10
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -222,7 +222,7 @@ func TestAnalyseGeneration(t *testing.T) {
 	debug = true
 	nIter := 10
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -254,7 +254,7 @@ func TestVacuumGeneration(t *testing.T) {
 	debug = true
 	nIter := 1000
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		s := &ast.Scope{
@@ -282,7 +282,7 @@ func TestCompoundGeneration(t *testing.T) {
 	debug = true
 	nIter := 100
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -314,7 +314,7 @@ func TestSavepointGeneration(t *testing.T) {
 	debug = true
 	nIter := 100
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -346,7 +346,7 @@ func TestCreateView(t *testing.T) {
 	debug = true
 	nIter := 100
 	for range nIter {
-		sch := generateTable(1)
+		sch := GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -373,7 +373,7 @@ func TestCreateView(t *testing.T) {
 }
 
 func BenchmarkGenerateSelect(b *testing.B) {
-	schm := generateTable(1)
+	schm := GenerateTable(1)
 
 	for b.Loop() {
 		// fresh s for each stmt

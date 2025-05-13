@@ -22,7 +22,7 @@ func (g *generator) Next() string {
 func (g *generator) NextBatchRandom(n uint) []ast.Prod {
 	batch := make([]ast.Prod, n)
 
-	sch := generateTable(1)
+	sch := GenerateTable(1)
 
 	for i := range n {
 		s := &ast.Scope{
@@ -39,7 +39,7 @@ func (g *generator) NextBatchRandom(n uint) []ast.Prod {
 func (g *generator) NextBatchUID(n uint) []ast.Prod {
 	batch := make([]ast.Prod, n)
 
-	sch := generateTable(1)
+	sch := GenerateTable(1)
 
 	for i := range n {
 		s := &ast.Scope{
