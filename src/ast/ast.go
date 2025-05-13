@@ -964,6 +964,7 @@ func (e *IfNullIfExpr) Type() schema.SqlType {
 
 type JoinCondition interface {
 	joinCondition()
+	Prod
 	Out() string
 }
 
