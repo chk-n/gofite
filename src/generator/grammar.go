@@ -215,9 +215,14 @@ func GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
 func GenerateCompound(p ast.Prod, s *ast.Scope) *ast.CompoundStmt {
 	stmt := ast.NewCompoundStmt(p)
 	slct := GenerateSelect(p, s)
-	// LIMIT clause needs to come after UNION
+	// LIMIT and ORDER BY clause needs to come after UNION
 	stmt.LimitClause = slct.LimitClause
+	// BUG: order by clause does not always work
+	// with compound operations because it uses
+	// <table>.<column> instead of the alias
+	// stmt.OrderByClause = slct.OrderByClause
 	slct.LimitClause = ""
+	slct.OrderByClause = nil
 
 	// the reason we set both sides to the same
 	// query is that grammar currently cant
@@ -425,11 +430,15 @@ func GenerateSelect(p ast.Prod, s *ast.Scope) *ast.SelectStmt {
 	stmt.FromClause = generateFromClause(stmt)
 	// needs to be run after fromClause to ensure `Refs`
 	// are available
+	stmt.OrderByClause = generateOrderByClause(stmt)
 	stmt.SelectClause = generateSelectClause(stmt)
 	stmt.WhereClause = generateBoolExpression(stmt)
 
 	if d6() > 2 {
-		stmt.LimitClause = fmt.Sprintf("LIMIT %d", d100()+d100())
+		stmt.LimitClause = fmt.Sprintf("LIMIT %d", dN())
+		if d6() > 2 {
+			stmt.OffsetClause = fmt.Sprintf("OFFSET %d", dN())
+		}
 	}
 
 	return stmt
@@ -638,6 +647,44 @@ func generateTableSubquery(p ast.Prod, lateral bool) *ast.TableSubquery {
 	subq.Scope.Refs = append(subq.Scope.Refs, &schema.AliasedRelation{Alias: alias, Cols: aliasedRel})
 
 	return subq
+}
+
+// generateOrderByClause creates a random ORDER BY clause for a SQL statement
+func generateOrderByClause(p ast.Prod) *ast.OrderByClause {
+	termCount := 1 + rand.Intn(3)
+	types := p.AvailableTypes()
+	if len(types) < termCount {
+		termCount = len(types)
+	}
+	clause := &ast.OrderByClause{
+		Base:  ast.NewBase(p.GetBase()),
+		Terms: make([]*ast.OrderByTerm, termCount),
+	}
+
+	for i := range termCount {
+		term := &ast.OrderByTerm{}
+
+		typ := randomPick(types)
+		expr, _ := retry(func() (ast.ValueExpr, error) {
+			return generateColumnReference(p, typ)
+		})
+		term.Expr = expr
+
+		if d6() == 1 {
+			collations := []string{"BINARY", "NOCASE", "RTRIM"}
+			term.Collation = randomPick(collations)
+		}
+
+		if d12() <= 3 {
+			term.SortDirection = "ASC"
+		} else if d12() <= 3 {
+			term.SortDirection = "DESC"
+		}
+
+		clause.Terms[i] = term
+	}
+
+	return clause
 }
 
 // ---------- //

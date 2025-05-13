@@ -389,6 +389,8 @@ type SelectStmt struct {
 	// TODO: add compound op (UNION)
 	LimitClause string
 	// TODO: add OFFSET
+	OffsetClause  string
+	OrderByClause *OrderByClause
 }
 
 func NewSelectStmt(p Prod, s *Scope, lateral bool) *SelectStmt {
@@ -430,9 +432,15 @@ func (s *SelectStmt) Out() string {
 	buf.WriteString("\n" + s.Base.Indent())
 	buf.WriteString("WHERE ")
 	buf.WriteString(s.WhereClause.Out())
+	if s.OrderByClause != nil {
+		buf.WriteString("\n" + s.Base.Indent())
+		buf.WriteString(s.OrderByClause.Out())
+	}
 	if s.LimitClause != "" {
 		buf.WriteString("\n" + s.Base.Indent())
 		buf.WriteString(s.LimitClause)
+		buf.WriteString(" ")
+		buf.WriteString(s.OffsetClause)
 	}
 	return buf.String()
 }
@@ -495,6 +503,45 @@ func (s *SelectClause) Out() string {
 		if i < len(s.ValueExprs)-1 {
 			buf.WriteString(", ")
 		}
+	}
+	return buf.String()
+}
+
+type OrderByClause struct {
+	*Base
+	Terms []*OrderByTerm
+}
+
+func (c *OrderByClause) Out() string {
+	if len(c.Terms) == 0 {
+		return ""
+	}
+
+	var buf strings.Builder
+	buf.WriteString("ORDER BY ")
+	for i, term := range c.Terms {
+		buf.WriteString(term.Out())
+		if i < len(c.Terms)-1 {
+			buf.WriteString(", ")
+		}
+	}
+	return buf.String()
+}
+
+type OrderByTerm struct {
+	Expr          ValueExpr
+	Collation     string
+	SortDirection string
+}
+
+func (t *OrderByTerm) Out() string {
+	var buf strings.Builder
+	buf.WriteString(t.Expr.Out())
+	if t.Collation != "" {
+		buf.WriteString(" COLLATE " + t.Collation)
+	}
+	if t.SortDirection != "" {
+		buf.WriteString(" " + t.SortDirection)
 	}
 	return buf.String()
 }
@@ -572,10 +619,11 @@ func (s *VacuumStmt) Out() string {
 
 type CompoundStmt struct {
 	*Base
-	Lhs         *SelectStmt
-	Rhs         *SelectStmt
-	Op          string
-	LimitClause string
+	Lhs           *SelectStmt
+	Rhs           *SelectStmt
+	Op            string
+	LimitClause   string
+	OrderByClause *OrderByClause
 }
 
 func NewCompoundStmt(p Prod) *CompoundStmt {
@@ -593,7 +641,12 @@ func (s *CompoundStmt) Out() string {
 	buf.WriteString(s.Lhs.Out())
 	buf.WriteString("\n" + s.Op + "\n")
 	buf.WriteString(s.Rhs.Out())
-	buf.WriteString("\n" + s.LimitClause)
+	if s.OrderByClause != nil {
+		buf.WriteString("\n" + s.OrderByClause.Out())
+	}
+	if s.LimitClause != "" {
+		buf.WriteString("\n" + s.LimitClause)
+	}
 	return buf.String()
 }
 
