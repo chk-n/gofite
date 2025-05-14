@@ -70,7 +70,7 @@ type Fuzzer struct {
 	startTime  time.Time
 	queriesCnt atomic.Int64
 
-	pool sync.Pool
+	pool *sync.Pool
 	mu   sync.RWMutex
 
 	log *slog.Logger
@@ -91,7 +91,7 @@ func New(cfg *Config) *Fuzzer {
 		batchesStructured: make(chan *generator.Batch, 5_000),
 		crash:             make(chan *generator.Batch, 100),
 		// coverage: NewCoverage(),
-		pool: sync.Pool{
+		pool: &sync.Pool{
 			New: func() any {
 				return &strings.Builder{}
 			},
@@ -204,7 +204,7 @@ func (f *Fuzzer) structuredInput() {
 // using non-deterministic compeltely random queries
 func (f *Fuzzer) run() {
 	// execute using diff_test_engine
-	dte := diff_test_engine.New(f.log)
+	dte := diff_test_engine.New(f.log, f.pool)
 	defer dte.Close()
 	for {
 		b := <-f.batchesRandom
@@ -227,7 +227,7 @@ func (f *Fuzzer) run() {
 // runs on one thread executing batches sequentially
 func (f *Fuzzer) runCmp() {
 	// execute using diff_test_engine
-	dte := diff_test_engine.New(f.log)
+	dte := diff_test_engine.New(f.log, f.pool)
 	defer dte.Close()
 	for {
 		b, _ := <-f.batchesStructured

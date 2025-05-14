@@ -3,6 +3,8 @@ package diff_test_engine
 import (
 	"log/slog"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/cnordg/ast-group-project/src/generator"
@@ -11,7 +13,12 @@ import (
 // Test execution, the source code of this function indicates how to use the engine.
 func TestDiffTestEngine(t *testing.T) {
 	// Initialise DTE
-	dte := New(slog.New(slog.NewTextHandler(os.Stdin, nil)))
+	p := &sync.Pool{
+		New: func() any {
+			return &strings.Builder{}
+		},
+	}
+	dte := New(slog.New(slog.NewTextHandler(os.Stdin, nil)), p)
 	defer dte.Close()
 
 	// Create random batch

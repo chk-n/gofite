@@ -33,9 +33,10 @@ type sqliteInstance struct {
 }
 
 type DiffTestEngineInstance struct {
-	old *sqliteInstance
-	new *sqliteInstance
-	l   *slog.Logger
+	old  *sqliteInstance
+	new  *sqliteInstance
+	l    *slog.Logger
+	pool *sync.Pool
 }
 
 func startSQLiteProcess(id string, binaryPath string, dbPath string, l *slog.Logger) (*sqliteInstance, error) {
@@ -275,7 +276,14 @@ type QueryResult struct {
 }
 
 func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch, onlyCheckErrors bool) (ok bool) {
-	q := b.String(&strings.Builder{}) + "; SELECT * FROM t0; DROP TABLE t0;"
+	out := s.pool.Get().(*strings.Builder)
+
+	defer func() {
+		out.Reset()
+		s.pool.Put(out)
+	}()
+
+	q := b.String(out) + "; SELECT * FROM t0; DROP TABLE t0;"
 	var wgExec sync.WaitGroup
 	wgExec.Add(2)
 
@@ -347,7 +355,7 @@ func (s *DiffTestEngineInstance) replaceInstances() {
 	s.new = instance2
 }
 
-func New(l *slog.Logger) *DiffTestEngineInstance {
+func New(l *slog.Logger, pool *sync.Pool) *DiffTestEngineInstance {
 
 	// Using in-memory databases for simplicity and isolation for each run.
 	l.Debug("Starting SQLite instances for differential testing...")
@@ -363,9 +371,10 @@ func New(l *slog.Logger) *DiffTestEngineInstance {
 	}
 
 	return &DiffTestEngineInstance{
-		old: instance1,
-		new: instance2,
-		l:   l,
+		old:  instance1,
+		new:  instance2,
+		l:    l,
+		pool: pool,
 	}
 	// defer instance2.Close()
 }
