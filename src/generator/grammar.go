@@ -651,18 +651,18 @@ func generateTableSubquery(p ast.Prod, lateral bool) *ast.TableSubquery {
 
 // generateOrderByClause creates a random ORDER BY clause for a SQL statement
 func generateOrderByClause(cols []*schema.Column) *ast.OrderByClause {
-	termCount := 1 + rand.Intn(3)
-	if len(cols) < termCount {
-		termCount = len(types)
-	}
+	// termCount := 1 + rand.Intn(3)
+	// if len(cols) < termCount {
+	// termCount = len(types)
+	// }
 	clause := &ast.OrderByClause{
-		Terms: make([]*ast.OrderByTerm, termCount),
+		Terms: make([]*ast.OrderByTerm, len(cols)),
 	}
 
-	for i := range termCount {
+	for i, col := range cols {
 		term := &ast.OrderByTerm{}
 
-		term.ColumnName = randomPick(cols).Ident()
+		term.ColumnName = col.Ident()
 
 		if d6() == 1 {
 			collations := []string{"BINARY", "NOCASE", "RTRIM"}
