@@ -31,7 +31,7 @@ func (b *Batch) Len() int {
 	return len(b.stmts)
 }
 
-func (b *Batch) String(out strings.Builder) string {
+func (b *Batch) String(out *strings.Builder) string {
 	sch := b.schema
 	out.WriteString(sch + "\n")
 	for _, s := range b.stmts {
@@ -40,7 +40,7 @@ func (b *Batch) String(out strings.Builder) string {
 	return out.String()
 }
 
-func (b *Batch) CrashString(out strings.Builder) string {
+func (b *Batch) CrashString(out *strings.Builder) string {
 	sch := b.schema
 	out.WriteString("/* -----------Error-----------\n" + b.Err.Error() + "-----------/Error----------- */\n")
 	out.WriteString(sch + "\n")

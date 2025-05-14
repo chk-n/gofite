@@ -314,7 +314,7 @@ func StartVerifier(sqliteV1BinaryPath string, sqliteV2BinaryPath string, queryCh
 	log.Println("SQLite instances started. Ready for queries.")
 	for {
 		b := <-queryChan
-		query := b.String(strings.Builder{}) + "; SELECT * FROM t0; DROP TABLE t0;"
+		query := b.String(&strings.Builder{}) + "; SELECT * FROM t0; DROP TABLE t0;"
 		go func(q string) {
 
 			var res QueryResult

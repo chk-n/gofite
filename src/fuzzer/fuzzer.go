@@ -94,13 +94,13 @@ func New(cfg *Config) *Fuzzer {
 	f := &Fuzzer{
 		batchSize:     cfg.BatchSize,
 		outDir:        cfg.OutDir,
-		batches:       make(chan *generator.Batch, 50_000), // TODO: empirically determine channel size
-		crash:         make(chan *generator.Batch, 1_000),  // TODO: empirically determine channel size
-		verifiedCrash: make(chan *generator.Batch, 1_000),  // TODO: empirically determine channel size
+		batches:       make(chan *generator.Batch, 5_000), // TODO: empirically determine channel size
+		crash:         make(chan *generator.Batch, 100),   // TODO: empirically determine channel size
+		verifiedCrash: make(chan *generator.Batch, 100),   // TODO: empirically determine channel size
 		coverage:      NewCoverage(),
 		pool: sync.Pool{
 			New: func() any {
-				return strings.Builder{}
+				return &strings.Builder{}
 			},
 		},
 		log: slog.New(slog.NewTextHandler(os.Stdout, opts)),
@@ -131,10 +131,8 @@ func (f *Fuzzer) Fuzz() {
 	}
 	f.log.Debug("starting seed corpus generation")
 	// start sql query generator
-	go f.seedCorpus()
-	// go f.seedCorpus()
+	go f.randomInput()
 
-	go f.reportStats()
 	// ratio between mutation vs execution is 1:4 // TODO: empirically determine ratio
 	// mutateCPU := runtime.NumCPU() / 4
 	// for range mutateCPU {
@@ -147,10 +145,11 @@ func (f *Fuzzer) Fuzz() {
 	go f.minimise()
 
 	f.log.Debug("starting f.run")
-	// runCPU := (runtime.NumCPU() / 4) * 3
-	for range 4 {
+	for range runtime.NumCPU() - 2 {
 		go f.run()
 	}
+
+	go f.reportStats()
 
 	// block forever
 	select {}
@@ -177,10 +176,8 @@ func (f *Fuzzer) reportStats() {
 	}
 }
 
-// generate an initial number of random sql queries
-// to determine a set of interesting queries to use
-// for corpus
-func (f *Fuzzer) seedCorpus() {
+// generate many random sql queries
+func (f *Fuzzer) randomInput() {
 	g := generator.New(&generator.Config{})
 	for {
 		stmts := g.NextBatchUID(f.batchSize)
@@ -188,6 +185,7 @@ func (f *Fuzzer) seedCorpus() {
 		select {
 		case f.batches <- b:
 		default:
+			time.Sleep(2 * time.Second)
 			// channel full
 			f.log.Error("query channel full. ignoring batch")
 		}
@@ -207,7 +205,7 @@ func (f *Fuzzer) run() {
 		// initialise new coverage bitmap
 		cov := NewCoverage()
 
-		out := f.pool.Get().(strings.Builder)
+		out := f.pool.Get().(*strings.Builder)
 		sql := b.String(out)
 
 		var err error
@@ -221,7 +219,7 @@ func (f *Fuzzer) run() {
 			case f.crash <- b:
 			default:
 				dte.Close()
-				// NOTE: idk if we first need to reset 'out' or not
+				out.Reset()
 				f.pool.Put(out)
 				f.log.Error("crash channel full. ignoring batch")
 				continue
@@ -242,7 +240,7 @@ func (f *Fuzzer) run() {
 			}
 		}
 
-		// dte.Close()
+		out.Reset()
 		f.pool.Put(out)
 
 		cov.Collect()
@@ -253,10 +251,12 @@ func (f *Fuzzer) run() {
 		// directly instead of first read locking. Depends how
 		// many new statements are discovered
 		f.mu.RLock()
-		if !cov.Compare(f.coverage) {
+		hasNewCoverage := cov.Compare(f.coverage)
+		f.mu.RUnlock()
+
+		if !hasNewCoverage {
 			continue
 		}
-		f.mu.RUnlock()
 
 		f.mu.Lock()
 		f.coverage = cov.Copy(f.coverage)
@@ -290,8 +290,7 @@ func (f *Fuzzer) minimise() {
 		// b := f.binarySearch(bs, 0, n)
 		b := bs
 
-		out := f.pool.Get().(strings.Builder)
-		defer f.pool.Put(out)
+		out := f.pool.Get().(*strings.Builder)
 
 		// save to disk
 		sql := b.CrashString(out)
@@ -302,6 +301,8 @@ func (f *Fuzzer) minimise() {
 		if err := os.WriteFile(filePath, []byte(sql), 0644); err != nil {
 			f.log.Error("failed to write crash file", slog.String("error", err.Error()))
 		}
+		out.Reset()
+		f.pool.Put(out)
 	}
 }
 
@@ -316,7 +317,8 @@ func (f *Fuzzer) binarySearch(b *generator.Batch, l, h int) *generator.Batch {
 
 	mid := (l + h) / 2
 
-	out := f.pool.Get().(strings.Builder)
+	out := f.pool.Get().(*strings.Builder)
+	defer out.Reset()
 	defer f.pool.Put(out)
 
 	// execute ls
