@@ -34,7 +34,7 @@ clean:
 sqlite3-3.26.0: 
 	@if [ ! -f $(SQLITE_3_26_BIN) ]; then \
 		echo "Building SQLite 3.26.0..."; \
-		cd include/sqlite-3.26.0 && \
+		cd include/sqlite3-3.26.0 && \
 		./configure --enable-debug --enable-fts5 && \
 		make && \
 		sudo cp sqlite3 $(SQLITE_3_26_BIN) && \
@@ -46,7 +46,7 @@ sqlite3-3.26.0:
 sqlite3-3.39.4: 
 	@if [ ! -f $(SQLITE_3_39_BIN) ]; then \
 		echo "Building SQLite 3.39.4..."; \
-		cd include/sqlite-3.39.4 && \
+		cd include/sqlite3-3.39.4 && \
 		./configure --enable-debug --enable-fts5 && \
 		make && \
 		sudo cp sqlite3 $(SQLITE_3_39_BIN) && \
