@@ -300,7 +300,7 @@ type QueryResult struct {
 	DiffDetails string
 }
 
-func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch) (ok bool) {
+func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch, onlyCheckErrors bool) (ok bool) {
 	q := b.String(&strings.Builder{}) + "; SELECT * FROM t0; DROP TABLE t0;"
 	var wgExec sync.WaitGroup
 	wgExec.Add(2)
@@ -319,6 +319,7 @@ func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch) (ok bool) {
 
 	wgExec.Wait()
 	// --- Comparison Logic ---
+	res.Match = true
 	if res.Error1 != nil && res.Error2 != nil {
 		// res.ErrorMatch = true // Both errored, could compare error messages if desired
 		// For simplicity, we'll call it an "error match"
@@ -326,12 +327,12 @@ func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch) (ok bool) {
 		res.DiffDetails = fmt.Sprintf("Both errored. Old_Err: %v || New_Err: %v", res.Error1, res.Error2)
 		res.Match = false // Technically outputs (errors) are not identical byte-wise
 	} else if res.Error1 != nil {
-		res.DiffDetails = fmt.Sprintf("Old Errored, New Succeeded") // . V1_Err: %v || V2_Out: %s", res.Error1, string(res.Output2))
+		res.DiffDetails = fmt.Sprintf("Old Errored, New Succeeded. Old_Err: %v || New_Out: %s", res.Error1, string(res.Output2))
 		res.Match = false
 	} else if res.Error2 != nil {
-		res.DiffDetails = fmt.Sprintf("Old Succeeded, New Errored") //. V1_Out: %s || V2_Err: %v", string(res.Output1), res.Error2)
+		res.DiffDetails = fmt.Sprintf("Old Succeeded, New Errored, Old Out: %s || New: %v", string(res.Output1), res.Error2)
 		res.Match = false
-	} else {
+	} else if !onlyCheckErrors {
 		// Both succeeded, compare outputs
 		if bytes.Equal(res.Output1, res.Output2) {
 			res.Match = true
@@ -343,9 +344,8 @@ func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch) (ok bool) {
 	}
 	if !res.Match {
 		b.Err = errors.New(res.DiffDetails)
-		return false
 	}
-	return true
+	return res.Match
 }
 
 func New(l *slog.Logger) *DiffTestEngineInstance {
