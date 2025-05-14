@@ -72,11 +72,11 @@ func (v *CharacteristicsVisitor) Visit(node Prod) {
 	case *UpdateStmt:
 		v.ClauseCounts["UPDATE"]++
 		v.Visit(n.SetClause)
-		v.Visit(n.Where)
+		v.Visit(n.WhereClause)
 
 	case *DeleteStmt:
 		v.ClauseCounts["DELETE"]++
-		v.Visit(n.Where)
+		v.Visit(n.WhereClause)
 
 	case *CTEStmt:
 		v.ClauseCounts["WITH"]++
@@ -210,6 +210,6 @@ func (v *CharacteristicsVisitor) Visit(node Prod) {
 		v.Visit(n.Expr2)
 
 	case *ExpressionJoinCondition:
-		v.Visit(n.Where)
+		v.Visit(n.WhereClause)
 	}
 }
