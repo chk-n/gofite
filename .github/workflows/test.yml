@@ -24,7 +24,7 @@ jobs:
       
     # NOTE: for now we have no main.go file to build
     #- name: Build
-    #  run: go build -v ./...
+    #  run: make build 
 
     - name: Test
-      run: go test -v -bench=none ./...
+      run: make test
