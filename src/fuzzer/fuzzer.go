@@ -63,8 +63,8 @@ type Fuzzer struct {
 	// batch size from config
 	batchSize uint
 	// global program coverage
-	coverage *Coverage
-	ctx      context.Context
+	// coverage *Coverage
+	ctx context.Context
 	// TODO: define corpus data structure
 	corpus []ast.Prod
 	// queries to be executed
@@ -97,7 +97,7 @@ func New(cfg *Config) *Fuzzer {
 		batches:       make(chan *generator.Batch, 5_000), // TODO: empirically determine channel size
 		crash:         make(chan *generator.Batch, 100),   // TODO: empirically determine channel size
 		verifiedCrash: make(chan *generator.Batch, 100),   // TODO: empirically determine channel size
-		coverage:      NewCoverage(),
+		// coverage: NewCoverage(),
 		pool: sync.Pool{
 			New: func() any {
 				return &strings.Builder{}
@@ -129,17 +129,10 @@ func (f *Fuzzer) Fuzz() {
 		f.log.Error("not enough CPU cores for fuzzer", slog.Int("cores", runtime.NumCPU()))
 		return
 	}
-	f.log.Debug("starting seed corpus generation")
-	// start sql query generator
-	go f.randomInput()
 
-	// ratio between mutation vs execution is 1:4 // TODO: empirically determine ratio
-	// mutateCPU := runtime.NumCPU() / 4
-	// for range mutateCPU {
-	// 	// TODO: mutator reads from corpus and
-	// 	// mutates and generates new queries
-	// 	go f.mutate()
-	// }
+	// start sql query generator
+	f.log.Debug("starting seed corpus generation")
+	go f.randomInput()
 
 	f.log.Debug("starting minimisation")
 	go f.minimise()
@@ -201,9 +194,8 @@ func (f *Fuzzer) run() {
 
 		f.queriesCnt.Add(int64(f.batchSize))
 
-		// TODO: implement coverage
 		// initialise new coverage bitmap
-		cov := NewCoverage()
+		// cov := NewCoverage()
 
 		out := f.pool.Get().(*strings.Builder)
 		sql := b.String(out)
@@ -243,27 +235,27 @@ func (f *Fuzzer) run() {
 		out.Reset()
 		f.pool.Put(out)
 
-		cov.Collect()
+		// cov.Collect()
 
 		// check if new coverage discovered and update global
 		// coverage with new coverage atomically
 		// NOTE: perhaps it is more performant to write lock
 		// directly instead of first read locking. Depends how
 		// many new statements are discovered
-		f.mu.RLock()
-		hasNewCoverage := cov.Compare(f.coverage)
-		f.mu.RUnlock()
+		// f.mu.RLock()
+		// hasNewCoverage := cov.Compare(f.coverage)
+		// f.mu.RUnlock()
 
-		if !hasNewCoverage {
-			continue
-		}
+		// if !hasNewCoverage {
+		// 	continue
+		// }
 
-		f.mu.Lock()
-		f.coverage = cov.Copy(f.coverage)
-		f.mu.Unlock()
+		// f.mu.Lock()
+		// f.coverage = cov.Copy(f.coverage)
+		// f.mu.Unlock()
 
-		f.log.Debug("new coverage found!")
-		f.log.Debug(f.coverage.Visualize())
+		// f.log.Debug("new coverage found!")
+		// f.log.Debug(f.coverage.Visualize())
 	}
 }
 

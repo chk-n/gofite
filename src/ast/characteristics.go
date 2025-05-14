@@ -36,6 +36,12 @@ func (v *CharacteristicsVisitor) Visit(node Prod) {
 		if n.LimitClause != "" {
 			v.ClauseCounts["LIMIT"]++
 		}
+		if n.OrderByClause != nil {
+			v.ClauseCounts["ORDER"]++
+		}
+		if n.OffsetClause != "" {
+			v.ClauseCounts["OFFSET"]++
+		}
 		v.Visit(n.SelectClause)
 		v.Visit(n.FromClause)
 		v.Visit(n.WhereClause)
@@ -101,6 +107,12 @@ func (v *CharacteristicsVisitor) Visit(node Prod) {
 
 	case *CompoundStmt:
 		v.ClauseCounts[n.Op]++
+		if n.LimitClause != "" {
+			v.ClauseCounts["LIMIT"]++
+		}
+		if n.OrderByClause != nil {
+			v.ClauseCounts["ORDER"]++
+		}
 		v.Visit(n.Lhs)
 		v.Visit(n.Rhs)
 
