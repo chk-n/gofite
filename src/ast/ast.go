@@ -508,7 +508,6 @@ func (s *SelectClause) Out() string {
 }
 
 type OrderByClause struct {
-	*Base
 	Terms []*OrderByTerm
 }
 
@@ -529,14 +528,14 @@ func (c *OrderByClause) Out() string {
 }
 
 type OrderByTerm struct {
-	Expr          ValueExpr
+	ColumnName    string
 	Collation     string
 	SortDirection string
 }
 
 func (t *OrderByTerm) Out() string {
 	var buf strings.Builder
-	buf.WriteString(t.Expr.Out())
+	buf.WriteString(t.ColumnName)
 	if t.Collation != "" {
 		buf.WriteString(" COLLATE " + t.Collation)
 	}

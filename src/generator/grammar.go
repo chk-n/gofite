@@ -430,9 +430,9 @@ func GenerateSelect(p ast.Prod, s *ast.Scope) *ast.SelectStmt {
 	stmt.FromClause = generateFromClause(stmt)
 	// needs to be run after fromClause to ensure `Refs`
 	// are available
-	stmt.OrderByClause = generateOrderByClause(stmt)
 	stmt.SelectClause = generateSelectClause(stmt)
 	stmt.WhereClause = generateBoolExpression(stmt)
+	stmt.OrderByClause = generateOrderByClause(stmt.SelectClause.DerivedColumns)
 
 	if d6() > 2 {
 		stmt.LimitClause = fmt.Sprintf("LIMIT %d", dN())
@@ -650,25 +650,19 @@ func generateTableSubquery(p ast.Prod, lateral bool) *ast.TableSubquery {
 }
 
 // generateOrderByClause creates a random ORDER BY clause for a SQL statement
-func generateOrderByClause(p ast.Prod) *ast.OrderByClause {
+func generateOrderByClause(cols []*schema.Column) *ast.OrderByClause {
 	termCount := 1 + rand.Intn(3)
-	types := p.AvailableTypes()
-	if len(types) < termCount {
+	if len(cols) < termCount {
 		termCount = len(types)
 	}
 	clause := &ast.OrderByClause{
-		Base:  ast.NewBase(p.GetBase()),
 		Terms: make([]*ast.OrderByTerm, termCount),
 	}
 
 	for i := range termCount {
 		term := &ast.OrderByTerm{}
 
-		typ := randomPick(types)
-		expr, _ := retry(func() (ast.ValueExpr, error) {
-			return generateColumnReference(p, typ)
-		})
-		term.Expr = expr
+		term.ColumnName = randomPick(cols).Ident()
 
 		if d6() == 1 {
 			collations := []string{"BINARY", "NOCASE", "RTRIM"}
