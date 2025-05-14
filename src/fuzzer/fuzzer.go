@@ -204,6 +204,7 @@ func (f *Fuzzer) structuredInput() {
 func (f *Fuzzer) run() {
 	// execute using diff_test_engine
 	dte := diff_test_engine.New(f.log)
+	defer dte.Close()
 	for {
 		b := <-f.batchesRandom
 		f.queriesCnt.Add(int64(f.batchSize))
@@ -214,9 +215,6 @@ func (f *Fuzzer) run() {
 			select {
 			case f.crash <- b:
 			default:
-				dte.Close()
-				// out.Reset()
-				// f.pool.Put(out)
 				f.log.Error("crash channel full. ignoring batch")
 				continue
 			}
@@ -229,6 +227,7 @@ func (f *Fuzzer) run() {
 func (f *Fuzzer) runCmp() {
 	// execute using diff_test_engine
 	dte := diff_test_engine.New(f.log)
+	defer dte.Close()
 	for {
 		b, _ := <-f.batchesStructured
 
@@ -243,9 +242,6 @@ func (f *Fuzzer) runCmp() {
 			select {
 			case f.crash <- b:
 			default:
-				dte.Close()
-				// out.Reset()
-				// f.pool.Put(out)
 				f.log.Error("crash channel full. ignoring batch")
 				continue
 			}
