@@ -29,11 +29,11 @@ func GenerateTable(num int) *schema.Schema {
 	for i := range num {
 		nCols := 2 + rand.Intn(9)
 
-		cols := make([]schema.Column, nCols)
+		cols := make([]*schema.Column, nCols)
 		defaults := make([]string, nCols)
 		dummy := &ast.SelectStmt{Base: ast.NewBase(nil)}
 		for i := range nCols {
-			col := schema.Column{
+			col := &schema.Column{
 				Name: fmt.Sprintf("c%d", i),
 				Typ:  randomPick(types),
 			}
@@ -466,7 +466,7 @@ func generateSelectClause(p ast.Prod) *ast.SelectClause {
 	c := &ast.SelectClause{
 		Base:           ast.NewBase(p.GetBase()),
 		ValueExprs:     []ast.ValueExpr{},
-		DerivedColumns: []schema.Column{},
+		DerivedColumns: []*schema.Column{},
 	}
 
 	// add at least one column
@@ -477,7 +477,7 @@ start:
 		return generateValueExpression(p, typ)
 	})
 	assert(err == nil, "expected no error")
-	col := schema.Column{
+	col := &schema.Column{
 		Name: fmt.Sprintf("c%d", c.GetStmtUid("c")),
 		Typ:  typ,
 	}

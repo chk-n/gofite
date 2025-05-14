@@ -491,7 +491,7 @@ func (t *TableOrQueryName) References() []schema.NamedRelation {
 type SelectClause struct {
 	*Base
 	ValueExprs     []ValueExpr
-	DerivedColumns []schema.Column
+	DerivedColumns []*schema.Column
 }
 
 func (s *SelectClause) Out() string {
