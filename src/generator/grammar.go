@@ -27,7 +27,7 @@ func GenerateTable(num int) *schema.Schema {
 	schm := &schema.Schema{}
 
 	for i := range num {
-		nCols := 2 + rand.Intn(9)
+		nCols := rand.Intn(11)
 
 		cols := make([]*schema.Column, nCols)
 		defaults := make([]string, nCols)
