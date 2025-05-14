@@ -202,7 +202,7 @@ DrainStderrLoop:
 
 	var outputBuffer bytes.Buffer
 	var querySpecificErrors []string
-	timeout := time.After(15 * time.Second) // Query timeout
+	timeout := time.After(45 * time.Second) // Query timeout
 
 	for {
 		select {
@@ -345,7 +345,31 @@ func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch, onlyCheckErrors bo
 	if !res.Match {
 		b.Err = errors.New(res.DiffDetails)
 	}
+
+	if res.Error1 != nil || res.Error2 != nil {
+		s.replaceInstances()
+	}
+
 	return res.Match
+}
+
+func (s *DiffTestEngineInstance) replaceInstances() {
+	s.Close()
+
+	instance1, err := startSQLiteProcess("Old", OldSqliteBinaryPath, ":memory:")
+	if err != nil {
+		log.Fatalf("Failed to start SQLite instance 1 (%s): %v", OldSqliteBinaryPath, err)
+		panic("failed to spawn SQLite process (old)")
+	}
+
+	instance2, err := startSQLiteProcess("New", NewSqliteBinaryPath, ":memory:")
+	if err != nil {
+		log.Fatalf("Failed to start SQLite instance 2 (%s): %v", NewSqliteBinaryPath, err)
+		panic("failed to spawn SQLite process (new)")
+	}
+
+	s.old = instance1
+	s.new = instance2
 }
 
 func New(l *slog.Logger) *DiffTestEngineInstance {
