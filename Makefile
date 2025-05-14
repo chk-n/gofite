@@ -20,7 +20,7 @@ build:
 	# clang -c include/instrument.c -o instrument.o
 	# ar rcs lib/libinstrument.a instrument.o
 	# rm instrument.o
-	go build -o $(BINARY_NAME) cmd/main.go
+	go build -ldflags="-s -w" -o $(BINARY_NAME) cmd/main.go
 
 # Clean built binary
 clean:
