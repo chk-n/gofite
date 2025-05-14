@@ -8,9 +8,8 @@ crashes.
 ## Architecture
 
 1. Random query generation
-2. Mutation engine (guided by code coverage)
-3. Differential testing (or EET)
-4. Test case reduction (delta debugging?)
+2. Differential testing 
+3. Test case reduction 
 
 ## Organisation
 
@@ -21,14 +20,21 @@ crashes.
 
 ## Dependencies
 
+## Build fuzzer
+
+```
+make build
+```
+Note: it stores sqlite binaries in `/bin` directory of your system
+
 ## Run cli fuzzer
 
 ```go
-// todo
+./main -d 30s
 ```
 
 ## Run tests
 
 ```go
-go test ./..
+make test
 ```
