@@ -333,7 +333,7 @@ func GenerateUpdate(p ast.Prod, s *ast.Scope) *ast.UpdateStmt {
 	stmt := ast.NewUpdateStmt(p, s, victim)
 
 	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
-	stmt.WhereClause = GenerateBoolExpression(stmt)
+	stmt.WhereClause = generateBoolExpression(stmt)
 	stmt.SetClause = generateSetClause(stmt, victim)
 
 	// NOTE: maybe we can combine update_stmt and update_returning
@@ -377,7 +377,7 @@ func GenerateDelete(p ast.Prod, s *ast.Scope) *ast.DeleteStmt {
 	stmt := ast.NewDeleteStmt(p, s, victim)
 
 	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
-	stmt.WhereClause = GenerateBoolExpression(stmt)
+	stmt.WhereClause = generateBoolExpression(stmt)
 
 	return stmt
 }
@@ -622,7 +622,7 @@ func generateExpressionJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCon
 	for _, ref := range r.References() {
 		b.Scope.Refs = append(b.Scope.Refs, ref)
 	}
-	cond.WhereClause = GenerateBoolExpression(cond)
+	cond.WhereClause = generateBoolExpression(cond)
 
 	return cond, nil
 
