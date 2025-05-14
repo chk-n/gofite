@@ -173,10 +173,11 @@ func (f *Fuzzer) randomInput() {
 		select {
 		case f.batches <- b:
 		default:
-			time.Sleep(2 * time.Second)
 			// channel full
+			time.Sleep(2 * time.Second)
 			f.log.Error("query channel full. ignoring batch")
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -226,16 +227,17 @@ func (f *Fuzzer) run() {
 		// f.mu.Unlock()
 
 		// f.log.Debug("new coverage found!")
-		// f.log.Debug(f.coverage.Visualize())
 	}
 }
 
 // TODO: implement mutation startegy
 func (f *Fuzzer) mutate() {
 	for {
-		// 1. read from corpus
-		// 2. mutate according to some startegy
-		// 3. pass batch to f.batches
+		// 1. Read from corpus
+		// 2. Create a batch with the original statement
+		// 3. Mutate the batch based on coverage
+		// 4. Pass to execution queue
+		// 5. Sleep briefly to avoid overwhelming the system
 	}
 }
 

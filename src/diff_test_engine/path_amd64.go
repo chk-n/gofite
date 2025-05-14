@@ -1,5 +1,5 @@
-//go:build arm64
-// +build arm64
+//go:build amd64
+// +build amd64
 
 package diff_test_engine
 

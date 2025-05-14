@@ -208,7 +208,7 @@ DrainStderrLoop:
 		select {
 		case <-timeout:
 			errMsg := fmt.Sprintf("[%s] timeout waiting for output delimiter. Query: '%s'. Output: '%s'. Errors: '%s'", s.instanceID, query, outputBuffer.String(), strings.Join(querySpecificErrors, "\n"))
-			return outputBuffer.Bytes(), fmt.Errorf(errMsg)
+			return outputBuffer.Bytes(), fmt.Errorf("%s", errMsg)
 		case errLine, ok := <-s.stderrChan:
 			if ok {
 				log.Printf("[%s] STDERR: %s", s.instanceID, errLine)
@@ -226,7 +226,7 @@ DrainStderrLoop:
 				if len(querySpecificErrors) > 0 {
 					errMsg += fmt.Sprintf(". Collected Stderr: %s", strings.Join(querySpecificErrors, "\n"))
 				}
-				return outputBuffer.Bytes(), fmt.Errorf(errMsg)
+				return outputBuffer.Bytes(), fmt.Errorf("%s", errMsg)
 			}
 			line := s.stdout.Text()
 			if line == uniqueDelimiter {
