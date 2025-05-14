@@ -324,7 +324,9 @@ var BuiltInFunctions = []*Routine{
 	// {Name: "sqlite_source_id", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
 	// NOTE: removed as we will test two different versions
 	// {Name: "sqlite_version", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
-	{Name: "total_changes", Schema: "", ArgTypes: []SqlType{}, RetType: INT},
+	// NOTE HARRY: Temporary disable because it causes incorrect state to accumulate across runs
+	// which is problematic if we use the same database.
+	// {Name: "total_changes", Schema: "", ArgTypes: []SqlType{}, RetType: INT},
 	{Name: "zeroblob", Schema: "", ArgTypes: []SqlType{INT}, RetType: BLOB},
 
 	// -------------- //

@@ -22,6 +22,9 @@ import (
 	sqlite_new_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_39_4_driver"
 )
 
+var old_sqlite_binary_path string = "../src/diff_test_engine/sqlite3-3.26.0-arm"
+var new_sqlite_binary_path string = "../src/diff_test_engine/sqlite3-3.39.4-modified"
+
 // The general algorithm:
 //
 // Initial phase:
@@ -65,9 +68,11 @@ type Fuzzer struct {
 	// TODO: define corpus data structure
 	corpus []ast.Prod
 	// queries to be executed
-	batches chan *Batch
+	batches chan *generator.Batch
 	// queries that caused an error
-	crash chan *Batch
+	crash chan *generator.Batch
+
+	verifiedCrash chan *generator.Batch
 
 	startTime  time.Time
 	queriesCnt atomic.Int64
@@ -87,11 +92,12 @@ func New(cfg *Config) *Fuzzer {
 	}
 	// TODO: set config Threads
 	f := &Fuzzer{
-		batchSize: cfg.BatchSize,
-		outDir:    cfg.OutDir,
-		batches:   make(chan *Batch, 50_000), // TODO: empirically determine channel size
-		crash:     make(chan *Batch, 1_000),  // TODO: empirically determine channel size
-		coverage:  NewCoverage(),
+		batchSize:     cfg.BatchSize,
+		outDir:        cfg.OutDir,
+		batches:       make(chan *generator.Batch, 50_000), // TODO: empirically determine channel size
+		crash:         make(chan *generator.Batch, 1_000),  // TODO: empirically determine channel size
+		verifiedCrash: make(chan *generator.Batch, 1_000),  // TODO: empirically determine channel size
+		coverage:      NewCoverage(),
 		pool: sync.Pool{
 			New: func() any {
 				return strings.Builder{}
@@ -112,6 +118,9 @@ func New(cfg *Config) *Fuzzer {
 }
 
 func (f *Fuzzer) Fuzz() {
+
+	go diff_test_engine.StartVerifier(old_sqlite_binary_path, new_sqlite_binary_path, f.crash, f.verifiedCrash)
+
 	f.startTime = time.Now()
 	f.ctx = context.Background()
 
@@ -123,7 +132,7 @@ func (f *Fuzzer) Fuzz() {
 	f.log.Debug("starting seed corpus generation")
 	// start sql query generator
 	go f.seedCorpus()
-	go f.seedCorpus()
+	// go f.seedCorpus()
 
 	go f.reportStats()
 	// ratio between mutation vs execution is 1:4 // TODO: empirically determine ratio
@@ -175,7 +184,7 @@ func (f *Fuzzer) seedCorpus() {
 	g := generator.New(&generator.Config{})
 	for {
 		stmts := g.NextBatchUID(f.batchSize)
-		b := NewBatch(stmts[0].Schema().Out(), stmts)
+		b := generator.NewBatch(stmts[0].Schema().Out(), stmts)
 		select {
 		case f.batches <- b:
 		default:
@@ -187,6 +196,8 @@ func (f *Fuzzer) seedCorpus() {
 
 // runs on one thread executing batches sequentially
 func (f *Fuzzer) run() {
+	// execute using diff_test_engine
+	dte := diff_test_engine.New(f.log)
 	for {
 		b, _ := <-f.batches
 
@@ -199,26 +210,13 @@ func (f *Fuzzer) run() {
 		out := f.pool.Get().(strings.Builder)
 		sql := b.String(out)
 
-		// execute using diff_test_engine
-		dte := diff_test_engine.New(f.log)
-
-		if err := dte.ExecAndCompareSQLErrors(sql); err != nil {
-			f.log.Info("crash detected!")
-			b.err = err
-			select {
-			case f.crash <- b:
-			default:
-				dte.Close()
-				// NOTE: idk if we first need to reset 'out' or not
-				f.pool.Put(out)
-				f.log.Error("crash channel full. ignoring batch")
-				continue
-			}
+		var err error
+		if err = dte.ExecAndCompareSQLErrors(sql); err == nil {
+			err = dte.CompareDBStates()
 		}
-		if err := dte.CompareDBStates(); err != nil {
-			f.log.Info("mismatch detected in compareDB!")
-			// fmt.Println("DEBUG (raw):", err.Error())
-			b.err = err
+		if err != nil {
+			f.log.Info("bug detected! verifying...")
+			b.Err = err
 			select {
 			case f.crash <- b:
 			default:
@@ -230,7 +228,21 @@ func (f *Fuzzer) run() {
 			}
 		}
 
-		dte.Close()
+		err = dte.ExecAndCompareSQLErrors("DROP TABLE t0;")
+		if err != nil {
+			f.log.Info("drop table issue detected: " + err.Error())
+			b.Err = err
+			select {
+			case f.crash <- b:
+			default:
+				dte.Close()
+				f.pool.Put(out)
+				f.log.Error("crash channel full. ignoring batch")
+				continue
+			}
+		}
+
+		// dte.Close()
 		f.pool.Put(out)
 
 		cov.Collect()
@@ -268,14 +280,15 @@ func (f *Fuzzer) mutate() {
 // caused the crash
 func (f *Fuzzer) minimise() {
 	for {
-		bs, _ := <-f.crash
+		bs, _ := <-f.verifiedCrash
 		n := bs.Len()
 
 		if n == 0 {
 			continue
 		}
 
-		b := f.binarySearch(bs, 0, n)
+		// b := f.binarySearch(bs, 0, n)
+		b := bs
 
 		out := f.pool.Get().(strings.Builder)
 		defer f.pool.Put(out)
@@ -295,7 +308,7 @@ func (f *Fuzzer) minimise() {
 // reduces a batch to find the smallest set of sql statements
 // that caused the issue. NOTE: returned minimal batch might
 // contain sql statements not needed for error to be triggered
-func (f *Fuzzer) binarySearch(b *Batch, l, h int) *Batch {
+func (f *Fuzzer) binarySearch(b *generator.Batch, l, h int) *generator.Batch {
 	if l-h <= 1 {
 		// case 1: minimal batch consisting of one query
 		return b
