@@ -12,11 +12,6 @@ func New(cfg *Config) *generator {
 	return &generator{}
 }
 
-// generates the next random sql query
-func (g *generator) Next() string {
-	panic("implement me")
-}
-
 // generates a batch of random sql queries.
 // each batch creates a new table
 func (g *generator) NextBatchRandom(n uint) []ast.Prod {
