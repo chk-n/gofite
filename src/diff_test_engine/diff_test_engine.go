@@ -181,12 +181,11 @@ func (s *sqliteInstance) cleanupPipes() {
 }
 
 func (s *sqliteInstance) ExecuteQuery(query string) ([]byte, error) {
-	var preExistingErrors []string
 DrainStderrLoop:
 	for {
 		select {
-		case errLine := <-s.stderrChan:
-			preExistingErrors = append(preExistingErrors, errLine)
+		case <-s.stderrChan:
+			continue
 		default:
 			break DrainStderrLoop
 		}
@@ -329,7 +328,8 @@ func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch, onlyCheckErrors bo
 }
 
 func (s *DiffTestEngineInstance) replaceInstances() {
-	s.Close()
+	s.old.Close()
+	s.new.Close()
 
 	instance1, err := startSQLiteProcess("Old", OldSqliteBinaryPath, ":memory:", s.l)
 	if err != nil {
