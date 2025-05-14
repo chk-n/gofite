@@ -129,12 +129,13 @@ func (f *Fuzzer) Fuzz() {
 	f.log.Debug("starting minimisation")
 	go f.minimise()
 
-	f.log.Debug("starting crash runer")
-	for range runtime.NumCPU()/2 - 2 {
+	f.log.Debug("starting crash runner")
+	for range runtime.NumCPU() {
 		go f.run()
 	}
-	f.log.Debug("starting comparison runer")
-	for range runtime.NumCPU()/2 - 2 {
+
+	f.log.Debug("starting comparison runner")
+	for range runtime.NumCPU() {
 		go f.runCmp()
 	}
 
