@@ -15,7 +15,7 @@ func TestDiffTestEngine(t *testing.T) {
 	defer dte.Close()
 
 	// Create random batch
-	g := generator.New(nil)
+	g := generator.New(&generator.Config{})
 	stmts := g.NextBatchRandom(10)
 	batch := generator.NewBatch(stmts[0].Schema().Out(), stmts)
 

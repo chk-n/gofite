@@ -12,18 +12,11 @@ import (
 
 var debug = false
 
-var types = []schema.SqlType{
-	// NOTE HARRY: Temporary disable those to make results a bit simpler
-	// schema.NUMERIC, ...
-	schema.INT, schema.TEXT, // schema.BLOB,
-	schema.BOOL, schema.NULL,
-}
-
 // TODO: maybe we can also generate random ALTER TABLE stmts
 
 // GenerateTable takes number of tables and an empty scope
 // and generates 'num' tables and populates scope
-func GenerateTable(num int) *schema.Schema {
+func (g *Generator) GenerateTable(num int) *schema.Schema {
 	schm := &schema.Schema{}
 
 	for i := range num {
@@ -35,7 +28,7 @@ func GenerateTable(num int) *schema.Schema {
 		for i := range nCols {
 			col := &schema.Column{
 				Name: fmt.Sprintf("c%d", i),
-				Typ:  randomPick(types),
+				Typ:  randomPick(g.types),
 			}
 
 			// TODO: randomly add primary key constraubt
@@ -44,7 +37,7 @@ func GenerateTable(num int) *schema.Schema {
 
 			cols[i] = col
 			if d6() == 1 {
-				v := GenerateConstantExpression(dummy, col.Typ)
+				v := g.GenerateConstantExpression(dummy, col.Typ)
 				defaults = append(defaults, v.Out())
 			}
 		}
@@ -61,12 +54,17 @@ func GenerateTable(num int) *schema.Schema {
 	}
 	// register aggregates and functions
 	schm.Aggregates = schema.BuiltInAggregates
-	schm.Routines = schema.BuiltInFunctions
+	if g.isDeterministic {
+		schm.Routines = schema.RemoveNonDeterministic(schema.BuiltInFunctions)
+	} else {
+		schm.Routines = schema.BuiltInFunctions
+
+	}
 
 	return schm
 }
 
-func GenerateView(p ast.Prod, s *ast.Scope) ast.Prod {
+func (g *Generator) GenerateView(p ast.Prod, s *ast.Scope) ast.Prod {
 	view := ast.NewViewStmt(p, s)
 
 	view.Name = fmt.Sprintf("v%d", view.GetStmtUid("view"))
@@ -80,11 +78,11 @@ func GenerateView(p ast.Prod, s *ast.Scope) ast.Prod {
 	}
 
 	if d6() < 5 {
-		slct := GenerateSelect(view, view.Scope)
+		slct := g.GenerateSelect(view, view.Scope)
 		view.Select = slct
 		view.Scope.Refs = append(view.Scope.Refs, slct.References()...)
 	} else {
-		cte := GenerateCTE(view, view.Scope)
+		cte := g.GenerateCTE(view, view.Scope)
 		view.Select = cte
 		for i := range cte.Refs {
 			aliased := &schema.AliasedRelation{
@@ -126,56 +124,56 @@ start:
 
 }
 
-func GenerateIUD(p ast.Prod, s *ast.Scope) ast.Prod {
+func (g *Generator) GenerateIUD(p ast.Prod, s *ast.Scope) ast.Prod {
 	if d6() < 4 { // 50%
-		return GenerateInsert(p, s)
+		return g.GenerateInsert(p, s)
 	} else if d6() < 6 { // 25%
-		return GenerateUpdate(p, s)
+		return g.GenerateUpdate(p, s)
 	}
 
 	// if d6() == 6 { // 25%
-	return GenerateDelete(p, s)
+	return g.GenerateDelete(p, s)
 }
 
-func GenerateSelectOrCTE(p ast.Prod, s *ast.Scope) ast.Prod {
+func (g *Generator) GenerateSelectOrCTE(p ast.Prod, s *ast.Scope) ast.Prod {
 	if d42() < 2 {
-		return GenerateCTE(p, s)
+		return g.GenerateCTE(p, s)
 	}
-	return GenerateSelect(p, s)
+	return g.GenerateSelect(p, s)
 }
 
-func GenerateStatement(p ast.Prod, s *ast.Scope) ast.Prod {
+func (g *Generator) GenerateStatement(p ast.Prod, s *ast.Scope) ast.Prod {
 	if d42() == 1 {
-		return GenerateInsert(p, s)
+		return g.GenerateInsert(p, s)
 	} else if d42() == 1 {
-		return GenerateUpdate(p, s)
+		return g.GenerateUpdate(p, s)
 	} else if d42() == 1 {
-		return GenerateDelete(p, s)
+		return g.GenerateDelete(p, s)
 	} else if d42() == 1 {
-		return GenerateCTE(p, s)
+		return g.GenerateCTE(p, s)
 	} else if d1000() == 1 {
-		return GenerateAnalyse(p, s)
+		return g.GenerateAnalyse(p, s)
 	} else if d1000()+d1000() == 1 {
-		return GenerateVacuum(p, s)
+		return g.GenerateVacuum(p, s)
 	}
 	/*else if d42() == 1 {
-		return generateUpsert(nil, s)
+		return g.generateUpsert(nil, s)
 	}
 	*/
-	return GenerateSelect(p, s)
+	return g.GenerateSelect(p, s)
 }
 
-func GenerateExplain(p ast.Prod, s *ast.Scope) *ast.ExplainStmt {
+func (g *Generator) GenerateExplain(p ast.Prod, s *ast.Scope) *ast.ExplainStmt {
 	expl := ast.NewExplainStmt(p)
 	if d6() < 3 {
 		expl.QueryPlan = true
 	}
-	expl.Stmt = GenerateStatement(p, s)
+	expl.Stmt = g.GenerateStatement(p, s)
 
 	return expl
 }
 
-func GenerateAnalyse(p ast.Prod, s *ast.Scope) *ast.AnalyseStmt {
+func (g *Generator) GenerateAnalyse(p ast.Prod, s *ast.Scope) *ast.AnalyseStmt {
 	stmt := ast.NewAnalyseStmt(p)
 	if s.Schema.Name != "" && d6() < 3 {
 		stmt.Name = s.Schema.Name
@@ -190,7 +188,7 @@ func GenerateAnalyse(p ast.Prod, s *ast.Scope) *ast.AnalyseStmt {
 	return stmt
 }
 
-func GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
+func (g *Generator) GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
 	stmt := ast.NewVacuumStmt(p)
 
 	// Not supported in 3.26.0..
@@ -212,9 +210,9 @@ func GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
 }
 
 // Generates UNION, INTERSECT and EXCEPT queries
-func GenerateCompound(p ast.Prod, s *ast.Scope) *ast.CompoundStmt {
+func (g *Generator) GenerateCompound(p ast.Prod, s *ast.Scope) *ast.CompoundStmt {
 	stmt := ast.NewCompoundStmt(p)
-	slct := GenerateSelect(p, s)
+	slct := g.GenerateSelect(p, s)
 	// LIMIT and ORDER BY clause needs to come after UNION
 	stmt.LimitClause = slct.LimitClause
 	// BUG: order by clause does not always work
@@ -246,7 +244,7 @@ func GenerateCompound(p ast.Prod, s *ast.Scope) *ast.CompoundStmt {
 	return stmt
 }
 
-func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
+func (g *Generator) GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
 	stmt := ast.NewSavepointStmt(p, s)
 
 	// create save point
@@ -278,7 +276,7 @@ func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
 
 	stmtCnt := d6()
 	for range stmtCnt {
-		q := GenerateStatement(stmt, stmt.Scope)
+		q := g.GenerateStatement(stmt, stmt.Scope)
 		stmt.Stmts = append(stmt.Stmts, q)
 	}
 
@@ -289,7 +287,7 @@ func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
 	// higher up in stack than current savepoint
 	// end clause
 	if d6() < 3 {
-		spStmt := GenerateSavepoint(p, stmt.Scope)
+		spStmt := g.GenerateSavepoint(p, stmt.Scope)
 		stmt.Stmts = append(stmt.Stmts, spStmt)
 		if spStmt.EndIdx < idx {
 			stmt.End = ""
@@ -303,7 +301,7 @@ func GenerateSavepoint(p ast.Prod, s *ast.Scope) *ast.SavepointStmt {
 // GenerateInsert picks a random table and then generates
 // values expressions for each column
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L374
-func GenerateInsert(p ast.Prod, s *ast.Scope) *ast.InsertStmt {
+func (g *Generator) GenerateInsert(p ast.Prod, s *ast.Scope) *ast.InsertStmt {
 	victim := randomPick(s.Tables)
 	stmt := ast.NewInsertStmt(p, s, victim)
 
@@ -315,7 +313,7 @@ func GenerateInsert(p ast.Prod, s *ast.Scope) *ast.InsertStmt {
 
 	for _, col := range stmt.Table.Columns() {
 		expr, err := retry(func() (ast.ValueExpr, error) {
-			return generateValueExpression(stmt, col.Typ)
+			return g.generateValueExpression(stmt, col.Typ)
 		})
 		assert(err == nil, "expected no error")
 		stmt.Exprs = append(stmt.Exprs, expr)
@@ -328,13 +326,13 @@ func GenerateInsert(p ast.Prod, s *ast.Scope) *ast.InsertStmt {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L433
-func GenerateUpdate(p ast.Prod, s *ast.Scope) *ast.UpdateStmt {
+func (g *Generator) GenerateUpdate(p ast.Prod, s *ast.Scope) *ast.UpdateStmt {
 	victim := randomPick(s.Tables)
 	stmt := ast.NewUpdateStmt(p, s, victim)
 
 	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
-	stmt.WhereClause = generateBoolExpression(stmt)
-	stmt.SetClause = generateSetClause(stmt, victim)
+	stmt.WhereClause = g.generateBoolExpression(stmt)
+	stmt.SetClause = g.generateSetClause(stmt, victim)
 
 	// NOTE: maybe we can combine update_stmt and update_returning
 	// as one struct. I am not sure why sqlsmith has two seperate
@@ -344,7 +342,7 @@ func GenerateUpdate(p ast.Prod, s *ast.Scope) *ast.UpdateStmt {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L408
-func generateSetClause(p ast.Prod, t schema.NamedRelation) *ast.SetClause {
+func (g *Generator) generateSetClause(p ast.Prod, t schema.NamedRelation) *ast.SetClause {
 	b := ast.NewBase(p.GetBase())
 
 	t, ok := t.(*schema.Table)
@@ -357,7 +355,7 @@ start:
 			continue
 		}
 		expr, err := retry(func() (ast.ValueExpr, error) {
-			return generateValueExpression(c, col.Type())
+			return g.generateValueExpression(c, col.Type())
 		})
 		assert(err == nil, "expected no error")
 		c.Values = append(c.Values, expr)
@@ -372,23 +370,23 @@ start:
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L362
-func GenerateDelete(p ast.Prod, s *ast.Scope) *ast.DeleteStmt {
+func (g *Generator) GenerateDelete(p ast.Prod, s *ast.Scope) *ast.DeleteStmt {
 	victim := randomPick(s.Tables)
 	stmt := ast.NewDeleteStmt(p, s, victim)
 
 	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
-	stmt.WhereClause = generateBoolExpression(stmt)
+	stmt.WhereClause = g.generateBoolExpression(stmt)
 
 	return stmt
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L498
-func GenerateCTE(p ast.Prod, s *ast.Scope) *ast.CTEStmt {
+func (g *Generator) GenerateCTE(p ast.Prod, s *ast.Scope) *ast.CTEStmt {
 	stmt := ast.NewCTEStmt(p, s)
 
 	// create at least one SELECT within CTE
 repeat1:
-	query := GenerateSelect(stmt, s)
+	query := g.GenerateSelect(stmt, s)
 	stmt.WithQueries = append(stmt.WithQueries, query)
 
 	alias := fmt.Sprintf("cte%d", stmt.GetStmtUid("cte"))
@@ -412,13 +410,13 @@ repeat2:
 	}
 
 	// generate main SQL statement
-	stmt.Query = GenerateSelect(stmt, stmt.Scope)
+	stmt.Query = g.GenerateSelect(stmt, stmt.Scope)
 
 	return stmt
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L314
-func GenerateSelect(p ast.Prod, s *ast.Scope) *ast.SelectStmt {
+func (g *Generator) GenerateSelect(p ast.Prod, s *ast.Scope) *ast.SelectStmt {
 	stmt := ast.NewSelectStmt(p, s, false)
 
 	if d100() == 1 {
@@ -427,12 +425,12 @@ func GenerateSelect(p ast.Prod, s *ast.Scope) *ast.SelectStmt {
 		stmt.SetQuantifier = "ALL"
 	}
 
-	stmt.FromClause = generateFromClause(stmt)
+	stmt.FromClause = g.generateFromClause(stmt)
 	// needs to be run after fromClause to ensure `Refs`
 	// are available
-	stmt.SelectClause = generateSelectClause(stmt)
-	stmt.WhereClause = generateBoolExpression(stmt)
-	stmt.OrderByClause = generateOrderByClause(stmt.SelectClause.DerivedColumns)
+	stmt.SelectClause = g.generateSelectClause(stmt)
+	stmt.WhereClause = g.generateBoolExpression(stmt)
+	stmt.OrderByClause = g.generateOrderByClause(stmt.SelectClause.DerivedColumns)
 
 	if d6() > 2 {
 		stmt.LimitClause = fmt.Sprintf("LIMIT %d", dN())
@@ -445,11 +443,11 @@ func GenerateSelect(p ast.Prod, s *ast.Scope) *ast.SelectStmt {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L200
-func generateFromClause(p ast.Prod) *ast.FromClause {
+func (g *Generator) generateFromClause(p ast.Prod) *ast.FromClause {
 	c := &ast.FromClause{Base: ast.NewBase(p.GetBase()), TableRefs: []ast.TableRef{}}
 
 	// we need at least one reference in FROM clause
-	c.TableRefs = append(c.TableRefs, generateTableRef(c))
+	c.TableRefs = append(c.TableRefs, g.generateTableRef(c))
 
 	for _, r := range c.TableRefs[0].References() {
 		c.Base.Scope.Refs = append(c.Base.Scope.Refs, r)
@@ -462,7 +460,7 @@ func generateFromClause(p ast.Prod) *ast.FromClause {
 
 // generates list of expressions for the select clause
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L215
-func generateSelectClause(p ast.Prod) *ast.SelectClause {
+func (g *Generator) generateSelectClause(p ast.Prod) *ast.SelectClause {
 	c := &ast.SelectClause{
 		Base:           ast.NewBase(p.GetBase()),
 		ValueExprs:     []ast.ValueExpr{},
@@ -474,7 +472,7 @@ func generateSelectClause(p ast.Prod) *ast.SelectClause {
 start:
 	typ := randomPick(types)
 	expr, err := retry(func() (ast.ValueExpr, error) {
-		return generateValueExpression(p, typ)
+		return g.generateValueExpression(p, typ)
 	})
 	assert(err == nil, "expected no error")
 	col := &schema.Column{
@@ -494,14 +492,14 @@ start:
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L153
-func generateJoinedTable(p ast.Prod) *ast.JoinedTable {
+func (g *Generator) generateJoinedTable(p ast.Prod) *ast.JoinedTable {
 	tab := &ast.JoinedTable{
 		Base: ast.NewBase(p.GetBase()),
 	}
 
 retry:
-	tab.Lhs = generateTableRef(tab)
-	tab.Rhs = generateTableRef(tab)
+	tab.Lhs = g.generateTableRef(tab)
+	tab.Rhs = g.generateTableRef(tab)
 
 	typ := ""
 	hasOnClause := true
@@ -536,7 +534,7 @@ retry:
 	tab.Type = typ
 	// natural join cant have ON clause
 	if hasOnClause {
-		cond, err := generateJoinCondition(tab, tab.Lhs, tab.Rhs)
+		cond, err := g.generateJoinCondition(tab, tab.Lhs, tab.Rhs)
 		if err != nil {
 			goto retry
 		}
@@ -559,15 +557,15 @@ retry:
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L96
-func generateJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
+func (g *Generator) generateJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
 	if d6() < 6 {
-		return generateExpressionJoinCondition(p, l, r)
+		return g.generateExpressionJoinCondition(p, l, r)
 	}
-	return generateSimpleJoinCondition(p, l, r)
+	return g.generateSimpleJoinCondition(p, l, r)
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L109
-func generateSimpleJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
+func (g *Generator) generateSimpleJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
 	// assert at least one ref in lhs with columns not empty
 	assert(atLeastOneColumn(l.References()), "expected at least one column in refs")
 
@@ -604,7 +602,7 @@ retry:
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L138
-func generateExpressionJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
+func (g *Generator) generateExpressionJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCondition, error) {
 	b := ast.NewBase(p.GetBase())
 	b.Scope = ast.NewScope(b.Scope)
 
@@ -622,14 +620,14 @@ func generateExpressionJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCon
 	for _, ref := range r.References() {
 		b.Scope.Refs = append(b.Scope.Refs, ref)
 	}
-	cond.WhereClause = generateBoolExpression(cond)
+	cond.WhereClause = g.generateBoolExpression(cond)
 
 	return cond, nil
 
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L81
-func generateTableSubquery(p ast.Prod, lateral bool) *ast.TableSubquery {
+func (g *Generator) generateTableSubquery(p ast.Prod, lateral bool) *ast.TableSubquery {
 	assert(!lateral, "sqlite 3.26 does not support lateral subqueries")
 
 	b := ast.NewBase(p.GetBase())
@@ -638,7 +636,7 @@ func generateTableSubquery(p ast.Prod, lateral bool) *ast.TableSubquery {
 		Base:      b,
 		IsLateral: lateral,
 	}
-	subq.Query = GenerateSelect(subq, b.Scope)
+	subq.Query = g.GenerateSelect(subq, b.Scope)
 
 	alias := fmt.Sprintf("subq%d", subq.Scope.StmtSeq["subq"])
 	subq.Scope.StmtSeq["subq"]++
@@ -650,7 +648,7 @@ func generateTableSubquery(p ast.Prod, lateral bool) *ast.TableSubquery {
 }
 
 // generateOrderByClause creates a random ORDER BY clause for a SQL statement
-func generateOrderByClause(cols []*schema.Column) *ast.OrderByClause {
+func (g *Generator) generateOrderByClause(cols []*schema.Column) *ast.OrderByClause {
 	// termCount := 1 + rand.Intn(3)
 	// if len(cols) < termCount {
 	// termCount = len(types)
@@ -686,18 +684,18 @@ func generateOrderByClause(cols []*schema.Column) *ast.OrderByClause {
 // ---------- //
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L15
-func generateTableRef(p ast.Prod) ast.TableRef {
+func (g *Generator) generateTableRef(p ast.Prod) ast.TableRef {
 	if p.Level() < 3+d6() {
 		if d6() > 3 && p.Level() < d6() {
-			return generateTableSubquery(p, false)
+			return g.generateTableSubquery(p, false)
 		}
 		if d6() > 3 {
-			return generateJoinedTable(p)
+			return g.generateJoinedTable(p)
 		}
 	}
 
 	// if d6() > 3 {
-	return generateTableOrQueryName(p)
+	return g.generateTableOrQueryName(p)
 	// } else {
 	// TODO
 	// return generateTableSample(p)
@@ -705,7 +703,7 @@ func generateTableRef(p ast.Prod) ast.TableRef {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.cc#L33
-func generateTableOrQueryName(p ast.Prod) *ast.TableOrQueryName {
+func (g *Generator) generateTableOrQueryName(p ast.Prod) *ast.TableOrQueryName {
 	tq := &ast.TableOrQueryName{
 		Base: ast.NewBase(p.GetBase()),
 	}
@@ -729,7 +727,7 @@ func generateTableOrQueryName(p ast.Prod) *ast.TableOrQueryName {
 
 // creates a reference to an existing column
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L77
-func generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
+func (g *Generator) generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
 	if len(p.References()) == 0 {
 		return nil, errors.New("no references available")
 	}
@@ -764,34 +762,34 @@ func generateColumnReference(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error
 // ----------- //
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L17
-func generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
-	if d20() == 1 && p.Level() < d6() && isWindowFunctionAllowed(p) {
-		return generateWindowFunction(p, t)
+func (g *Generator) generateValueExpression(p ast.Prod, t schema.SqlType) (ast.ValueExpr, error) {
+	if d20() == 1 && p.Level() < d6() && g.isWindowFunctionAllowed(p) {
+		return g.generateWindowFunction(p, t)
 	} else if p.Level() < d6() && 1 == d42() {
-		return generateCastExpression(p, t)
+		return g.generateCastExpression(p, t)
 	} else if p.Level() < d6() && 1 == d42() {
-		return generateCoalesceExpression(p, t)
+		return g.generateCoalesceExpression(p, t)
 	} else if p.Level() < d6() && 1 == d42() {
-		return generateIfNullIfExpression(p, t)
+		return g.generateIfNullIfExpression(p, t)
 	} else if p.Level() < d6() && d6() == 1 {
-		return generateFunctionCallExpression(p, t, false)
+		return g.generateFunctionCallExpression(p, t, false)
 	} else if p.Level() < d6() && d9() == 1 {
-		return generateCaseExpression(p, t)
+		return g.generateCaseExpression(p, t)
 	} else if len(p.References()) > 0 && d20() > 1 {
-		return generateColumnReference(p, t)
+		return g.generateColumnReference(p, t)
 	}
 
-	return GenerateConstantExpression(p, t), nil
+	return g.GenerateConstantExpression(p, t), nil
 }
 
 // creates a constant expression based on t or existing sqlite types
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L195
-func GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
+func (g *Generator) GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 	var value string
 
 	// select random type if not set
 	if t == 0 {
-		t = randomPick(types)
+		t = randomPick(g.types)
 	}
 
 	// create random value for type
@@ -819,7 +817,7 @@ func GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 		}
 	case schema.DATE:
 		if d6() < 6 {
-			year := 2000 + rand.Intn(23)
+			year := rand.Intn(9999)
 			month := 1 + rand.Intn(12)
 			day := 1 + rand.Intn(28)
 			value = fmt.Sprintf("'%04d-%02d-%02d'", year, month, day)
@@ -827,27 +825,27 @@ func GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 			value = "CURRENT_DATE"
 		}
 	case schema.TIME:
-		// NOTE HARRY: Remove CURRENT_TIME, CURRENT_TIMESTAMP to make diff test deterministic
-		// if d6() < 6 {
-		hour := rand.Intn(24)
-		minute := rand.Intn(60)
-		second := rand.Intn(60)
-		value = fmt.Sprintf("'%02d:%02d:%02d'", hour, minute, second)
-		// } else {
-		// value = "CURRENT_TIME"
-		// }
+		if d6() == 0 && g.isDeterministic {
+			value = "CURRENT_TIME"
+		} else {
+			hour := rand.Intn(24)
+			minute := rand.Intn(60)
+			second := rand.Intn(60)
+			value = fmt.Sprintf("'%02d:%02d:%02d'", hour, minute, second)
+		}
 	case schema.DATETIME:
 		// if d6() < 6 {
-		year := rand.Intn(9999)
-		month := 1 + rand.Intn(12)
-		day := 1 + rand.Intn(28)
-		hour := rand.Intn(24)
-		minute := rand.Intn(60)
-		second := rand.Intn(60)
-		value = fmt.Sprintf("'%04d-%02d-%02d %02d:%02d:%02d'", year, month, day, hour, minute, second)
-		// } else {
-		// value = "CURRENT_TIMESTAMP"
-		// }
+		if d6() == 0 && g.isDeterministic {
+			value = "CURRENT_TIMESTAMP"
+		} else {
+			year := rand.Intn(9999)
+			month := 1 + rand.Intn(12)
+			day := 1 + rand.Intn(28)
+			hour := rand.Intn(24)
+			minute := rand.Intn(60)
+			second := rand.Intn(60)
+			value = fmt.Sprintf("'%04d-%02d-%02d %02d:%02d:%02d'", year, month, day, hour, minute, second)
+		}
 	default:
 		value = "NULL"
 	}
@@ -860,27 +858,27 @@ func GenerateConstantExpression(p ast.Prod, t schema.SqlType) ast.ValueExpr {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L96
-func generateBoolExpression(p ast.Prod) ast.BoolExpr {
+func (g *Generator) generateBoolExpression(p ast.Prod) ast.BoolExpr {
 	assert(len(p.AvailableTypes()) > 0, "expected types to be available")
 
 	if p.Level() > d100() {
-		return generateTruthExpression(p)
+		return g.generateTruthExpression(p)
 	}
 	if d6() < 4 {
-		return generateComparisonOperation(p)
+		return g.generateComparisonOperation(p)
 	} else if d6() < 4 {
-		return generateBooleanComparisonOperation(p)
+		return g.generateBooleanComparisonOperation(p)
 	} else if d6() < 4 {
-		return generateNullPredicateExpression(p)
+		return g.generateNullPredicateExpression(p)
 	} else if d6() < 4 {
-		return generateTruthExpression(p)
+		return g.generateTruthExpression(p)
 	} else {
-		return generateExistsExpression(p)
+		return g.generateExistsExpression(p)
 	}
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.hh#L98
-func generateTruthExpression(p ast.Prod) ast.BoolExpr {
+func (g *Generator) generateTruthExpression(p ast.Prod) ast.BoolExpr {
 	if d6() < 4 {
 		return &ast.TruthExpr{Base: p.GetBase(), Value: true}
 	}
@@ -888,18 +886,18 @@ func generateTruthExpression(p ast.Prod) ast.BoolExpr {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L42
-func generateComparisonOperation(p ast.Prod) ast.BoolExpr {
+func (g *Generator) generateComparisonOperation(p ast.Prod) ast.BoolExpr {
 	typ := randomPick(p.AvailableTypes())
 	left, err := retry(func() (ast.ValueExpr, error) {
-		return generateValueExpression(p, typ)
+		return g.generateValueExpression(p, typ)
 	})
 	assert(err == nil, "expected no error")
 
-	op := randomOperatorByType(typ)
+	op := g.randomOperatorByType(typ)
 
 	// make sure rhs matches the lhs type
 	right, err := retry(func() (ast.ValueExpr, error) {
-		return generateValueExpression(p, typ)
+		return g.generateValueExpression(p, typ)
 	})
 	assert(err == nil, "expected no error")
 
@@ -912,10 +910,10 @@ func generateComparisonOperation(p ast.Prod) ast.BoolExpr {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.hh#L147
-func generateBooleanComparisonOperation(p ast.Prod) ast.BoolExpr {
-	left := generateBoolExpression(p)
+func (g *Generator) generateBooleanComparisonOperation(p ast.Prod) ast.BoolExpr {
+	left := g.generateBoolExpression(p)
 	op := randomPick([]string{"AND", "OR"})
-	right := generateBoolExpression(p)
+	right := g.generateBoolExpression(p)
 
 	return &ast.BinaryExpr{
 		Base:  p.GetBase(),
@@ -925,9 +923,9 @@ func generateBooleanComparisonOperation(p ast.Prod) ast.BoolExpr {
 	}
 }
 
-func generateNullPredicateExpression(p ast.Prod) ast.BoolExpr {
+func (g *Generator) generateNullPredicateExpression(p ast.Prod) ast.BoolExpr {
 	exp, err := retry(func() (ast.ValueExpr, error) {
-		return generateValueExpression(p, 0)
+		return g.generateValueExpression(p, 0)
 	})
 	assert(err == nil, "expected no error")
 
@@ -939,15 +937,15 @@ func generateNullPredicateExpression(p ast.Prod) ast.BoolExpr {
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L119
-func generateExistsExpression(p ast.Prod) ast.BoolExpr {
+func (g *Generator) generateExistsExpression(p ast.Prod) ast.BoolExpr {
 	exp := &ast.ExistsExpr{
 		Base: ast.NewBase(p.GetBase()),
 	}
-	exp.Subquery = GenerateSelect(exp, exp.Scope)
+	exp.Subquery = g.GenerateSelect(exp, exp.Scope)
 	return exp
 }
 
-func randomOperatorByType(t schema.SqlType) string {
+func (g *Generator) randomOperatorByType(t schema.SqlType) string {
 	commonOps := []string{"=", "<>"}
 
 	switch t {
@@ -963,7 +961,7 @@ func randomOperatorByType(t schema.SqlType) string {
 	}
 }
 
-func generateCaseExpression(p ast.Prod, constraint schema.SqlType) (ast.ValueExpr, error) {
+func (g *Generator) generateCaseExpression(p ast.Prod, constraint schema.SqlType) (ast.ValueExpr, error) {
 	b := ast.NewBase(p.GetBase())
 	exp := &ast.CaseExpr{
 		Base: b,
@@ -978,7 +976,7 @@ func generateCaseExpression(p ast.Prod, constraint schema.SqlType) (ast.ValueExp
 		// with multiple when then
 		n = d12()
 		val, err := retry(func() (ast.ValueExpr, error) {
-			return generateColumnReference(exp, constraint)
+			return g.generateColumnReference(exp, constraint)
 		})
 		if err != nil {
 			return nil, err
@@ -991,9 +989,9 @@ func generateCaseExpression(p ast.Prod, constraint schema.SqlType) (ast.ValueExp
 	}
 
 	for range n {
-		when := generateBoolExpression(exp)
+		when := g.generateBoolExpression(exp)
 		then, err := retry(func() (ast.ValueExpr, error) {
-			return generateValueExpression(exp, constraint)
+			return g.generateValueExpression(exp, constraint)
 		})
 		if err != nil {
 			return nil, err
@@ -1004,7 +1002,7 @@ func generateCaseExpression(p ast.Prod, constraint schema.SqlType) (ast.ValueExp
 
 	// else clause
 	els, err := retry(func() (ast.ValueExpr, error) {
-		return generateValueExpression(exp, constraint)
+		return g.generateValueExpression(exp, constraint)
 	})
 	if err != nil {
 		return nil, err
@@ -1014,13 +1012,13 @@ func generateCaseExpression(p ast.Prod, constraint schema.SqlType) (ast.ValueExp
 	return exp, nil
 }
 
-func generateCastExpression(p ast.Prod, constraint schema.SqlType) (*ast.CastExpr, error) {
+func (g *Generator) generateCastExpression(p ast.Prod, constraint schema.SqlType) (*ast.CastExpr, error) {
 	expr := &ast.CastExpr{
 		Base: ast.NewBase(p.GetBase()),
 	}
 
 	sourceExpr, err := retry(func() (ast.ValueExpr, error) {
-		return generateValueExpression(expr, 0)
+		return g.generateValueExpression(expr, 0)
 	})
 	assert(err == nil, "expected no error")
 	expr.Expr = sourceExpr
@@ -1028,7 +1026,7 @@ func generateCastExpression(p ast.Prod, constraint schema.SqlType) (*ast.CastExp
 pick:
 	// NOTE: this might not always yield
 	// a correct cast
-	expr.Typ = randomPick(types)
+	expr.Typ = randomPick(g.types)
 	if expr.Typ == schema.NULL {
 		goto pick
 	}
@@ -1036,7 +1034,7 @@ pick:
 	return expr, nil
 }
 
-func generateCoalesceExpression(p ast.Prod, constraint schema.SqlType) (*ast.CoalesceExpr, error) {
+func (g *Generator) generateCoalesceExpression(p ast.Prod, constraint schema.SqlType) (*ast.CoalesceExpr, error) {
 	expr := &ast.CoalesceExpr{
 		Base: ast.NewBase(p.GetBase()),
 	}
@@ -1049,7 +1047,7 @@ func generateCoalesceExpression(p ast.Prod, constraint schema.SqlType) (*ast.Coa
 	for i := range numExprs {
 		expr.Exprs[i], err = retry(func() (ast.ValueExpr, error) {
 			t := randomPick(types)
-			return generateValueExpression(expr, t)
+			return g.generateValueExpression(expr, t)
 		})
 		assert(err == nil, "expected no error")
 	}
@@ -1057,7 +1055,7 @@ func generateCoalesceExpression(p ast.Prod, constraint schema.SqlType) (*ast.Coa
 	return expr, nil
 }
 
-func generateIfNullIfExpression(p ast.Prod, constraint schema.SqlType) (*ast.IfNullIfExpr, error) {
+func (g *Generator) generateIfNullIfExpression(p ast.Prod, constraint schema.SqlType) (*ast.IfNullIfExpr, error) {
 	expr := &ast.IfNullIfExpr{
 		Base: ast.NewBase(p.GetBase()),
 	}
@@ -1065,12 +1063,12 @@ func generateIfNullIfExpression(p ast.Prod, constraint schema.SqlType) (*ast.IfN
 	expr.IsIfNull = d6() < 4
 
 	var err error
-	expr.Expr1, err = generateValueExpression(expr, constraint)
+	expr.Expr1, err = g.generateValueExpression(expr, constraint)
 	if err != nil {
 		return nil, err
 	}
 
-	expr.Expr2, err = generateValueExpression(expr, constraint)
+	expr.Expr2, err = g.generateValueExpression(expr, constraint)
 	if err != nil {
 		return nil, err
 	}
@@ -1088,11 +1086,11 @@ func generateIfNullIfExpression(p ast.Prod, constraint schema.SqlType) (*ast.IfN
 // --------- //
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L359
-func generateWindowFunction(p ast.Prod, constraint schema.SqlType) (*ast.WindowFunExpr, error) {
+func (g *Generator) generateWindowFunction(p ast.Prod, constraint schema.SqlType) (*ast.WindowFunExpr, error) {
 	expr := &ast.WindowFunExpr{
 		Base: ast.NewBase(p.GetBase()),
 	}
-	agg, err := generateAggregateCallExpression(p, constraint)
+	agg, err := g.generateAggregateCallExpression(p, constraint)
 	if err != nil {
 		return nil, err
 	}
@@ -1100,18 +1098,18 @@ func generateWindowFunction(p ast.Prod, constraint schema.SqlType) (*ast.WindowF
 	expr.Aggregate = agg
 	expr.Typ = agg.Typ
 
-	pb, err := generateColumnReference(expr, expr.Typ)
+	pb, err := g.generateColumnReference(expr, expr.Typ)
 	expr.PartionBy = append(expr.PartionBy, pb)
 	for d6() < 4 {
-		pb, err := generateColumnReference(expr, expr.Typ)
+		pb, err := g.generateColumnReference(expr, expr.Typ)
 		assert(err == nil, "expected no error")
 		expr.PartionBy = append(expr.PartionBy, pb)
 	}
 
-	ob, err := generateColumnReference(expr, expr.Typ)
+	ob, err := g.generateColumnReference(expr, expr.Typ)
 	expr.OrderBy = append(expr.OrderBy, ob)
 	for d6() < 4 {
-		ob, err := generateColumnReference(expr, expr.Typ)
+		ob, err := g.generateColumnReference(expr, expr.Typ)
 		assert(err == nil, "expected no error")
 		expr.OrderBy = append(expr.OrderBy, ob)
 	}
@@ -1120,7 +1118,7 @@ func generateWindowFunction(p ast.Prod, constraint schema.SqlType) (*ast.WindowF
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L374C1-L383C2
-func isWindowFunctionAllowed(p ast.Prod) bool {
+func (g *Generator) isWindowFunctionAllowed(p ast.Prod) bool {
 	if sc, ok := p.(*ast.SelectClause); ok {
 		_, ok := sc.Parent().(*ast.SelectStmt)
 		return ok
@@ -1129,22 +1127,22 @@ func isWindowFunctionAllowed(p ast.Prod) bool {
 		return false
 	}
 	if ve, ok := p.(ast.ValueExpr); ok {
-		return isWindowFunctionAllowed(ve.Parent())
+		return g.isWindowFunctionAllowed(ve.Parent())
 	}
 	return false
 }
 
 // if [constraint] is nil a random function is selected
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/expr.cc#L210
-func generateFunctionCallExpression(p ast.Prod, constraint schema.SqlType, aggregate bool) (*ast.FunCallExpr, error) {
+func (g *Generator) generateFunctionCallExpression(p ast.Prod, constraint schema.SqlType, aggregate bool) (*ast.FunCallExpr, error) {
 	if aggregate {
-		return generateAggregateCallExpression(p, constraint)
+		return g.generateAggregateCallExpression(p, constraint)
 	}
 
 	// pick a random built in function e.g. core,
 	// math or datetime
 	proc := randomPick(schema.BuiltInFunctions)
-	args := generateFunctionArguments(p, proc.ArgTypes)
+	args := g.generateFunctionArguments(p, proc.ArgTypes)
 	if constraint != 0 && proc.RetType != constraint {
 		return nil, errors.New("no matching constraint found")
 	}
@@ -1158,7 +1156,7 @@ func generateFunctionCallExpression(p ast.Prod, constraint schema.SqlType, aggre
 
 }
 
-func generateAggregateCallExpression(p ast.Prod, constraint schema.SqlType) (*ast.FunCallExpr, error) {
+func (g *Generator) generateAggregateCallExpression(p ast.Prod, constraint schema.SqlType) (*ast.FunCallExpr, error) {
 	b := ast.NewBase(p.GetBase())
 	expr := &ast.FunCallExpr{
 		Base:        b,
@@ -1176,7 +1174,7 @@ func generateAggregateCallExpression(p ast.Prod, constraint schema.SqlType) (*as
 	} else {
 		params = make([]ast.ValueExpr, len(proc.ArgTypes))
 		for i, argType := range proc.ArgTypes {
-			exp, err := generateValueExpression(p, argType)
+			exp, err := g.generateValueExpression(p, argType)
 			if err != nil {
 				return nil, err
 			}
@@ -1194,7 +1192,7 @@ func generateAggregateCallExpression(p ast.Prod, constraint schema.SqlType) (*as
 	return expr, nil
 }
 
-func generateFunctionArguments(p ast.Prod, argTypes []schema.SqlType) []ast.ValueExpr {
+func (g *Generator) generateFunctionArguments(p ast.Prod, argTypes []schema.SqlType) []ast.ValueExpr {
 	var vals []ast.ValueExpr
 	var tValue string
 
@@ -1209,26 +1207,26 @@ func generateFunctionArguments(p ast.Prod, argTypes []schema.SqlType) []ast.Valu
 			// arguments
 			i += rand.Intn(100)
 		case schema.TIMEVALUE:
-			val, tVal := generateDatetimeValue()
+			val, tVal := g.generateDatetimeValue()
 			tValue = tVal
 			vals = append(vals, ast.NewConstant(p, val, schema.TEXT))
 		case schema.TIMEMODIFIER:
 			// as timevalues always precede modifiers
 			// we just get last time value
 			assert(tValue != "", "expected tValue to be set")
-			mod := generateDatetimeModifier(tValue)
+			mod := g.generateDatetimeModifier(tValue)
 			vals = append(vals, ast.NewConstant(p, mod, schema.TEXT))
 		case schema.RUNE:
-			vals = append(vals, generateUnicode(p))
+			vals = append(vals, g.generateUnicode(p))
 		case schema.ANY:
-			vals = append(vals, GenerateConstantExpression(p, 0))
+			vals = append(vals, g.GenerateConstantExpression(p, 0))
 		case schema.REAL01:
 			// altjhough 1.0 not included this should
 			// be fine
 			r := fmt.Sprintf("%f", rand.Float32())
 			vals = append(vals, ast.NewConstant(p, r, schema.REAL))
 		default:
-			vals = append(vals, GenerateConstantExpression(p, at))
+			vals = append(vals, g.GenerateConstantExpression(p, at))
 		}
 		if j < len(argTypes) {
 			j++
@@ -1241,26 +1239,26 @@ func generateFunctionArguments(p ast.Prod, argTypes []schema.SqlType) []ast.Valu
 }
 
 // https://sqlite.org/lang_datefunc.html
-func generateDatetimeValue() (string, string) {
+func (g *Generator) generateDatetimeValue() (string, string) {
 	i := rand.Intn(12)
 	tv := schema.DatetimeTimeValues[i]
 	switch i + 1 {
 	case 1:
 		y := randomInt(9999)
 		m := randomInt(12)
-		d := generateDay(m)
+		d := g.generateDay(m)
 		return fmt.Sprintf(tv, y, m, d), tv
 	case 2, 5:
 		y := randomInt(9999)
 		mn := randomInt(12)
-		d := generateDay(mn)
+		d := g.generateDay(mn)
 		h := randomInt(24)
 		m := randomInt(59)
 		return fmt.Sprintf(tv, y, mn, d, h, m), tv
 	case 3, 6:
 		y := randomInt(9999)
 		mn := randomInt(12)
-		d := generateDay(mn)
+		d := g.generateDay(mn)
 		h := randomInt(24)
 		m := randomInt(59)
 		s := randomInt(59)
@@ -1268,7 +1266,7 @@ func generateDatetimeValue() (string, string) {
 	case 4, 7:
 		y := randomInt(9999)
 		mn := randomInt(12)
-		d := generateDay(mn)
+		d := g.generateDay(mn)
 		h := randomInt(24)
 		m := randomInt(59)
 		s := randomInt(59)
@@ -1298,7 +1296,7 @@ func generateDatetimeValue() (string, string) {
 	}
 }
 
-func generateDatetimeModifier(timeValue string) string {
+func (g *Generator) generateDatetimeModifier(timeValue string) string {
 	i := rand.Intn(25)
 	// only julianday, unixepoch, auto
 	// and localtime supported with that
@@ -1328,19 +1326,19 @@ func generateDatetimeModifier(timeValue string) string {
 	case 10:
 		y := randomInt(9999)
 		m := randomInt(12)
-		d := generateDay(m)
+		d := g.generateDay(m)
 		return fmt.Sprintf(mod, y, m, d)
 	case 11:
 		y := randomInt(9999)
 		mn := randomInt(12)
-		d := generateDay(mn)
+		d := g.generateDay(mn)
 		h := randomInt(24)
 		m := randomInt(59)
 		return fmt.Sprintf(mod, y, mn, d, h, m)
 	case 12:
 		y := randomInt(9999)
 		mn := randomInt(12)
-		d := generateDay(mn)
+		d := g.generateDay(mn)
 		h := randomInt(24)
 		m := randomInt(59)
 		s := randomInt(59)
@@ -1348,7 +1346,7 @@ func generateDatetimeModifier(timeValue string) string {
 	case 13:
 		y := randomInt(9999)
 		mn := randomInt(12)
-		d := generateDay(mn)
+		d := g.generateDay(mn)
 		h := randomInt(24)
 		m := randomInt(59)
 		s := randomInt(59)
@@ -1361,7 +1359,7 @@ func generateDatetimeModifier(timeValue string) string {
 	}
 }
 
-func generateDay(month int) int {
+func (g *Generator) generateDay(month int) int {
 	var d int
 	// NOTE: we will get invalid days
 	// if 'y' is a leap year
@@ -1384,7 +1382,7 @@ func generateDay(month int) int {
 	return d
 }
 
-func generateUnicode(p ast.Prod) ast.ValueExpr {
+func (g *Generator) generateUnicode(p ast.Prod) ast.ValueExpr {
 	for {
 		cp := rune(rand.Intn(0x10FFFF + 1))
 

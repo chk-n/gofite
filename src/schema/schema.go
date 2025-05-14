@@ -232,6 +232,40 @@ var BuiltInAggregates = []*Routine{
 	{Name: "total", Schema: "", ArgTypes: []SqlType{INT}, RetType: REAL},
 }
 
+// filters out non-deterministic built-in functions
+func RemoveNonDeterministic(functions []*Routine) []*Routine {
+	nonDeterministic := map[string]bool{
+		"random":     true,
+		"randomblob": true,
+
+		"sqlite_source_id":          true,
+		"sqlite_version":            true,
+		"total_changes":             true,
+		"sqlite_offset":             true,
+		"sqlite_compileoption_get":  true,
+		"sqlite_compileoption_used": true,
+		"load_extension":            true,
+
+		"date":      true,
+		"time":      true,
+		"datetime":  true,
+		"julianday": true,
+		"strftime":  true,
+		// "unixepoch": true,
+		// "timediff":  true,
+	}
+
+	deterministicFunctions := make([]*Routine, 0, len(functions))
+
+	for _, function := range functions {
+		if !nonDeterministic[function.Name] {
+			deterministicFunctions = append(deterministicFunctions, function)
+		}
+	}
+
+	return deterministicFunctions
+}
+
 // Some special types are used here such as
 // * MULTI: to represent ability to add n arguments followed by a type
 // * RUNE: unicode code point
@@ -307,26 +341,14 @@ var BuiltInFunctions = []*Routine{
 	// NOTE: removed as we wont be loading extensions
 	// {Name: "load_extension", Schema: "", ArgTypes: []SqlType{TEXT}, RetType: NULL},
 	// {Name: "load_extension", Schema: "", ArgTypes: []SqlType{TEXT, TEXT}, RetType: NULL},
-	// NOTE: for differential testing we want to avoid
-	// any random behaviour.
-	// {Name: "random", Schema: "", ArgTypes: []SqlType{}, RetType: INT},
-	// {Name: "randomblob", Schema: "", ArgTypes: []SqlType{INT}, RetType: BLOB},
-	// NOTE HARRY : Disabled to make deterministic
-	// {Name: "sqlite_compileoption_get", Schema: "", ArgTypes: []SqlType{INT}, RetType: TEXT},
-	// NOTE: if we enable this we need to keep a list of
-	// compile time option strings
-	// {Name: "sqlite_compileoption_used", Schema: "", ArgTypes: []SqlType{TEXT}, RetType: INT},
-	// NOTE: this might not be the same across two database
-	// instances. TODO: test this
+	{Name: "random", Schema: "", ArgTypes: []SqlType{}, RetType: INT},
+	{Name: "randomblob", Schema: "", ArgTypes: []SqlType{INT}, RetType: BLOB},
+	{Name: "sqlite_compileoption_get", Schema: "", ArgTypes: []SqlType{INT}, RetType: TEXT},
+	{Name: "sqlite_compileoption_used", Schema: "", ArgTypes: []SqlType{TEXT}, RetType: INT},
 	// {Name: "sqlite_offset", Schema: "", ArgTypes: []SqlType{COLUMN}, RetType: INT},
-	// NOTE: this value will be different between both
-	// DBs during differential testing
-	// {Name: "sqlite_source_id", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
-	// NOTE: removed as we will test two different versions
-	// {Name: "sqlite_version", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
-	// NOTE HARRY: Temporary disable because it causes incorrect state to accumulate across runs
-	// which is problematic if we use the same database.
-	// {Name: "total_changes", Schema: "", ArgTypes: []SqlType{}, RetType: INT},
+	{Name: "sqlite_source_id", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
+	{Name: "sqlite_version", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
+	{Name: "total_changes", Schema: "", ArgTypes: []SqlType{}, RetType: INT},
 	{Name: "zeroblob", Schema: "", ArgTypes: []SqlType{INT}, RetType: BLOB},
 
 	// -------------- //
@@ -370,22 +392,20 @@ var BuiltInFunctions = []*Routine{
 	// Datetime functions //
 	// ------------------ //
 
-	// NOTE HARRY : Disabled to make deterministic
-
-	// {Name: "date", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},                                     // Current date
-	// {Name: "date", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: TEXT}, // With time value
-	// {Name: "time", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
-	// {Name: "time", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: TEXT},
-	// {Name: "datetime", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
-	// {Name: "datetime", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: TEXT},
-	// {Name: "julianday", Schema: "", ArgTypes: []SqlType{}, RetType: REAL},
-	// {Name: "julianday", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: REAL},
-	// // {Name: "unixepoch", Schema: "", ArgTypes: []SqlType{}, RetType: INT},
-	// // {Name: "unixepoch", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: INT},
-	// // {Name: "strftime", Schema: "", ArgTypes: []SqlType{TEXT}, RetType: TEXT},                                       // Format string only
-	// {Name: "strftime", Schema: "", ArgTypes: []SqlType{TEXT, TIMEVALUE}, RetType: TEXT},                          // With time value
-	// {Name: "strftime", Schema: "", ArgTypes: []SqlType{TEXT, TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: TEXT}, // Multiple modifiers
-	// // {Name: "timediff", Schema: "", ArgTypes: []SqlType{TIMEVALUE, TIMEVALUE}, RetType: TEXT},
+	{Name: "date", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
+	{Name: "date", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: TEXT},
+	{Name: "time", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
+	{Name: "time", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: TEXT},
+	{Name: "datetime", Schema: "", ArgTypes: []SqlType{}, RetType: TEXT},
+	{Name: "datetime", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: TEXT},
+	{Name: "julianday", Schema: "", ArgTypes: []SqlType{}, RetType: REAL},
+	{Name: "julianday", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: REAL},
+	// {Name: "unixepoch", Schema: "", ArgTypes: []SqlType{}, RetType: INT},
+	// {Name: "unixepoch", Schema: "", ArgTypes: []SqlType{TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: INT},
+	{Name: "strftime", Schema: "", ArgTypes: []SqlType{TEXT}, RetType: TEXT},
+	{Name: "strftime", Schema: "", ArgTypes: []SqlType{TEXT, TIMEVALUE}, RetType: TEXT},
+	{Name: "strftime", Schema: "", ArgTypes: []SqlType{TEXT, TIMEVALUE, MULTI, TIMEMODIFIER}, RetType: TEXT},
+	// {Name: "timediff", Schema: "", ArgTypes: []SqlType{TIMEVALUE, TIMEVALUE}, RetType: TEXT},
 }
 
 var DatetimeTimeValues = []string{

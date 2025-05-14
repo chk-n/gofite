@@ -20,10 +20,12 @@ import (
 func TestSelectGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
+
 	debug = true
 	nIter := 100
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -36,7 +38,7 @@ func TestSelectGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateSelect(nil, s)
+			q := g.GenerateSelect(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -52,12 +54,13 @@ func TestSelectGeneration(t *testing.T) {
 func TestCTEGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 
 	nIter := 500
 	for range nIter {
 
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n"
 		// generate queries
 		nQueries := 100
@@ -69,7 +72,7 @@ func TestCTEGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateCTE(nil, s)
+			q := g.GenerateCTE(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -85,10 +88,11 @@ func TestCTEGeneration(t *testing.T) {
 func TestInsertGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 500
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n"
 		// generate queries
 		nQueries := 100
@@ -100,7 +104,7 @@ func TestInsertGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateInsert(nil, s)
+			q := g.GenerateInsert(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -116,11 +120,12 @@ func TestInsertGeneration(t *testing.T) {
 func TestUpdateGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 500
 	for range nIter {
 
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n"
 		// generate queries
 		nQueries := 100
@@ -132,7 +137,7 @@ func TestUpdateGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateUpdate(nil, s)
+			q := g.GenerateUpdate(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -148,10 +153,11 @@ func TestUpdateGeneration(t *testing.T) {
 func TestDeleteGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 500
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n"
 		// generate queries
 		nQueries := 100
@@ -163,7 +169,7 @@ func TestDeleteGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateDelete(nil, s)
+			q := g.GenerateDelete(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -179,10 +185,11 @@ func TestDeleteGeneration(t *testing.T) {
 func TestExplainGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 10
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -195,7 +202,7 @@ func TestExplainGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateExplain(nil, s)
+			q := g.GenerateExplain(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -211,10 +218,11 @@ func TestExplainGeneration(t *testing.T) {
 func TestAnalyseGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 10
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -227,7 +235,7 @@ func TestAnalyseGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateAnalyse(nil, s)
+			q := g.GenerateAnalyse(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -243,10 +251,11 @@ func TestAnalyseGeneration(t *testing.T) {
 func TestVacuumGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 1000
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		s := &ast.Scope{
@@ -256,7 +265,7 @@ func TestVacuumGeneration(t *testing.T) {
 			StmtSeq: make(map[string]uint),
 		}
 
-		q := GenerateVacuum(nil, s)
+		q := g.GenerateVacuum(nil, s)
 		query := schemaSql + q.Out() + ";\n"
 		cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 		var buf bytes.Buffer
@@ -271,10 +280,11 @@ func TestVacuumGeneration(t *testing.T) {
 func TestCompoundGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 100
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -287,7 +297,7 @@ func TestCompoundGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateCompound(nil, s)
+			q := g.GenerateCompound(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -303,10 +313,11 @@ func TestCompoundGeneration(t *testing.T) {
 func TestSavepointGeneration(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 100
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -319,7 +330,7 @@ func TestSavepointGeneration(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateSavepoint(nil, s)
+			q := g.GenerateSavepoint(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -335,10 +346,11 @@ func TestSavepointGeneration(t *testing.T) {
 func TestCreateView(t *testing.T) {
 	t.Parallel()
 
+	g := New(&Config{IsDeterministic: false})
 	debug = true
 	nIter := 100
 	for range nIter {
-		sch := GenerateTable(1)
+		sch := g.GenerateTable(1)
 		schemaSql := sch.Out() + "\n "
 
 		// generate queries
@@ -351,7 +363,7 @@ func TestCreateView(t *testing.T) {
 				StmtSeq: make(map[string]uint),
 			}
 
-			q := GenerateView(nil, s)
+			q := g.GenerateView(nil, s)
 			query := schemaSql + q.Out() + ";\n"
 			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
@@ -365,7 +377,8 @@ func TestCreateView(t *testing.T) {
 }
 
 func BenchmarkGenerateSelect(b *testing.B) {
-	schm := GenerateTable(1)
+	g := New(&Config{IsDeterministic: false})
+	schm := g.GenerateTable(1)
 
 	for b.Loop() {
 		// fresh s for each stmt
@@ -376,7 +389,7 @@ func BenchmarkGenerateSelect(b *testing.B) {
 			StmtSeq: make(map[string]uint),
 		}
 
-		stmt := GenerateSelect(nil, s)
+		stmt := g.GenerateSelect(nil, s)
 
 		// check to avoid function from being optimised
 		// away. not sure if this is still required in bench

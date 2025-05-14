@@ -10,7 +10,8 @@ import (
 )
 
 func TestCharacteristicsVisitor(t *testing.T) {
-	sch := generator.GenerateTable(1)
+	g := generator.New(&generator.Config{})
+	sch := g.GenerateTable(1)
 
 	s := &ast.Scope{
 		Tables:  sch.Tables,
@@ -19,7 +20,7 @@ func TestCharacteristicsVisitor(t *testing.T) {
 		StmtSeq: make(map[string]uint),
 	}
 
-	stmt := generator.GenerateStatement(nil, s)
+	stmt := g.GenerateStatement(nil, s)
 
 	fmt.Printf("Generated Query:\n%s\n\n", stmt.Out())
 
