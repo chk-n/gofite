@@ -14,7 +14,7 @@ type Relation interface {
 type NamedRelation interface {
 	Out() string
 	Name() string
-	Columns() []Column
+	Columns() []*Column
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L20
@@ -93,7 +93,7 @@ func (s *Schema) Out() string {
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L65
 type Table struct {
 	name     string
-	cols     []Column
+	cols     []*Column
 	defaults []string
 	// TODO: add constraints
 	// true means a tempory
@@ -104,7 +104,7 @@ type Table struct {
 	ifNotExists bool
 }
 
-func NewTable(n string, cols []Column, defaults []string, isTemp, ifNotExists bool) *Table {
+func NewTable(n string, cols []*Column, defaults []string, isTemp, ifNotExists bool) *Table {
 	return &Table{
 		name:        n,
 		cols:        cols,
@@ -136,7 +136,7 @@ func (t *Table) Out() string {
 	return buf.String()
 }
 
-func (t *Table) Columns() []Column {
+func (t *Table) Columns() []*Column {
 	return t.cols
 }
 
@@ -146,7 +146,7 @@ func (t *Table) Name() string {
 
 type AliasedRelation struct {
 	Alias string
-	Cols  []Column
+	Cols  []*Column
 }
 
 func (t *AliasedRelation) Out() string {
@@ -157,7 +157,7 @@ func (t *AliasedRelation) Name() string {
 	return t.Alias
 }
 
-func (t *AliasedRelation) Columns() []Column {
+func (t *AliasedRelation) Columns() []*Column {
 	return t.Cols
 }
 
@@ -192,7 +192,7 @@ func (o *Operator) Ident() string {
 
 type RelationColumn struct {
 	Rel NamedRelation
-	Col Column
+	Col *Column
 }
 
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/relmodel.hh#L127

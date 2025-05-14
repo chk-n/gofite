@@ -4,10 +4,9 @@
 BINARY_NAME=main
 
 # Environment variables for build
-CC=clang
-export CC
+export CC=clang
 export CGO_ENABLED=1
-export CGO_CFLAGS=-fsanitize-coverage=trace-pc-guard
+# export CGO_CFLAGS=-fsanitize-coverage=bb,trace-pc-guard 
 
 .PHONY: all build clean run
 

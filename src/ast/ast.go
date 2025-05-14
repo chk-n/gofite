@@ -216,10 +216,10 @@ func (i *InsertStmt) Out() string {
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L247
 type UpdateStmt struct {
 	*Base
-	LocalScope *Scope
-	Table      *schema.Table
-	SetClause  *SetClause
-	Where      BoolExpr
+	LocalScope  *Scope
+	Table       *schema.Table
+	SetClause   *SetClause
+	WhereClause BoolExpr
 }
 
 func NewUpdateStmt(p Prod, s *Scope, t schema.NamedRelation) *UpdateStmt {
@@ -253,7 +253,7 @@ func (u *UpdateStmt) Out() string {
 	buf.WriteString(u.SetClause.Out())
 	buf.WriteString("\n")
 	buf.WriteString("WHERE ")
-	buf.WriteString(u.Where.Out())
+	buf.WriteString(u.WhereClause.Out())
 
 	return buf.String()
 }
@@ -286,9 +286,9 @@ func (c *SetClause) Out() string {
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L177
 type DeleteStmt struct {
 	*Base
-	LocalScope *Scope
-	Table      *schema.Table
-	Where      BoolExpr
+	LocalScope  *Scope
+	Table       *schema.Table
+	WhereClause BoolExpr
 }
 
 // NOTE: these `modifying_stmt` are all the same. We should
@@ -322,7 +322,7 @@ func (s *DeleteStmt) Out() string {
 	buf.WriteString(s.Table.Name())
 	buf.WriteString("\n")
 	buf.WriteString("WHERE ")
-	buf.WriteString(s.Where.Out())
+	buf.WriteString(s.WhereClause.Out())
 
 	return buf.String()
 }
@@ -491,7 +491,7 @@ func (t *TableOrQueryName) References() []schema.NamedRelation {
 type SelectClause struct {
 	*Base
 	ValueExprs     []ValueExpr
-	DerivedColumns []schema.Column
+	DerivedColumns []*schema.Column
 }
 
 func (s *SelectClause) Out() string {
@@ -508,7 +508,6 @@ func (s *SelectClause) Out() string {
 }
 
 type OrderByClause struct {
-	*Base
 	Terms []*OrderByTerm
 }
 
@@ -529,14 +528,14 @@ func (c *OrderByClause) Out() string {
 }
 
 type OrderByTerm struct {
-	Expr          ValueExpr
+	ColumnName    string
 	Collation     string
 	SortDirection string
 }
 
 func (t *OrderByTerm) Out() string {
 	var buf strings.Builder
-	buf.WriteString(t.Expr.Out())
+	buf.WriteString(t.ColumnName)
 	if t.Collation != "" {
 		buf.WriteString(" COLLATE " + t.Collation)
 	}
@@ -1082,13 +1081,13 @@ func (c *SimpleJoinCondition) Out() string {
 // https://github.com/anse1/sqlsmith/blob/46c1df710ea0217d87247bb1fc77f4a09bca77f7/grammar.hh#L74
 type ExpressionJoinCondition struct {
 	*Base
-	LocalScope *Scope
-	Lhs        TableRef
-	Rhs        TableRef
-	Where      BoolExpr
+	LocalScope  *Scope
+	Lhs         TableRef
+	Rhs         TableRef
+	WhereClause BoolExpr
 }
 
 func (c *ExpressionJoinCondition) joinCondition() {}
 func (c *ExpressionJoinCondition) Out() string {
-	return c.Where.Out()
+	return c.WhereClause.Out()
 }

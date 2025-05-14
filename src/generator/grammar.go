@@ -29,11 +29,11 @@ func GenerateTable(num int) *schema.Schema {
 	for i := range num {
 		nCols := 2 + rand.Intn(9)
 
-		cols := make([]schema.Column, nCols)
+		cols := make([]*schema.Column, nCols)
 		defaults := make([]string, nCols)
 		dummy := &ast.SelectStmt{Base: ast.NewBase(nil)}
 		for i := range nCols {
-			col := schema.Column{
+			col := &schema.Column{
 				Name: fmt.Sprintf("c%d", i),
 				Typ:  randomPick(types),
 			}
@@ -333,7 +333,7 @@ func GenerateUpdate(p ast.Prod, s *ast.Scope) *ast.UpdateStmt {
 	stmt := ast.NewUpdateStmt(p, s, victim)
 
 	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
-	stmt.Where = generateBoolExpression(stmt)
+	stmt.WhereClause = generateBoolExpression(stmt)
 	stmt.SetClause = generateSetClause(stmt, victim)
 
 	// NOTE: maybe we can combine update_stmt and update_returning
@@ -377,7 +377,7 @@ func GenerateDelete(p ast.Prod, s *ast.Scope) *ast.DeleteStmt {
 	stmt := ast.NewDeleteStmt(p, s, victim)
 
 	stmt.Scope.Refs = append(stmt.Scope.Refs, victim)
-	stmt.Where = generateBoolExpression(stmt)
+	stmt.WhereClause = generateBoolExpression(stmt)
 
 	return stmt
 }
@@ -430,9 +430,9 @@ func GenerateSelect(p ast.Prod, s *ast.Scope) *ast.SelectStmt {
 	stmt.FromClause = generateFromClause(stmt)
 	// needs to be run after fromClause to ensure `Refs`
 	// are available
-	stmt.OrderByClause = generateOrderByClause(stmt)
 	stmt.SelectClause = generateSelectClause(stmt)
 	stmt.WhereClause = generateBoolExpression(stmt)
+	stmt.OrderByClause = generateOrderByClause(stmt.SelectClause.DerivedColumns)
 
 	if d6() > 2 {
 		stmt.LimitClause = fmt.Sprintf("LIMIT %d", dN())
@@ -466,7 +466,7 @@ func generateSelectClause(p ast.Prod) *ast.SelectClause {
 	c := &ast.SelectClause{
 		Base:           ast.NewBase(p.GetBase()),
 		ValueExprs:     []ast.ValueExpr{},
-		DerivedColumns: []schema.Column{},
+		DerivedColumns: []*schema.Column{},
 	}
 
 	// add at least one column
@@ -477,7 +477,7 @@ start:
 		return generateValueExpression(p, typ)
 	})
 	assert(err == nil, "expected no error")
-	col := schema.Column{
+	col := &schema.Column{
 		Name: fmt.Sprintf("c%d", c.GetStmtUid("c")),
 		Typ:  typ,
 	}
@@ -622,7 +622,7 @@ func generateExpressionJoinCondition(p ast.Prod, l, r ast.TableRef) (ast.JoinCon
 	for _, ref := range r.References() {
 		b.Scope.Refs = append(b.Scope.Refs, ref)
 	}
-	cond.Where = generateBoolExpression(cond)
+	cond.WhereClause = generateBoolExpression(cond)
 
 	return cond, nil
 
@@ -650,25 +650,19 @@ func generateTableSubquery(p ast.Prod, lateral bool) *ast.TableSubquery {
 }
 
 // generateOrderByClause creates a random ORDER BY clause for a SQL statement
-func generateOrderByClause(p ast.Prod) *ast.OrderByClause {
+func generateOrderByClause(cols []*schema.Column) *ast.OrderByClause {
 	termCount := 1 + rand.Intn(3)
-	types := p.AvailableTypes()
-	if len(types) < termCount {
+	if len(cols) < termCount {
 		termCount = len(types)
 	}
 	clause := &ast.OrderByClause{
-		Base:  ast.NewBase(p.GetBase()),
 		Terms: make([]*ast.OrderByTerm, termCount),
 	}
 
 	for i := range termCount {
 		term := &ast.OrderByTerm{}
 
-		typ := randomPick(types)
-		expr, _ := retry(func() (ast.ValueExpr, error) {
-			return generateColumnReference(p, typ)
-		})
-		term.Expr = expr
+		term.ColumnName = randomPick(cols).Ident()
 
 		if d6() == 1 {
 			collations := []string{"BINARY", "NOCASE", "RTRIM"}
