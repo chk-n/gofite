@@ -1168,7 +1168,7 @@ func (g *Generator) generateFunctionCallExpression(p ast.Prod, constraint schema
 
 	// pick a random built in function e.g. core,
 	// math or datetime
-	proc := randomPick(schema.BuiltInFunctions)
+	proc := randomPick(p.Schema().Routines)
 	args := g.generateFunctionArguments(p, proc.ArgTypes)
 	if constraint != 0 && proc.RetType != constraint {
 		return nil, errors.New("no matching constraint found")
