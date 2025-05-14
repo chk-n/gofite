@@ -551,14 +551,16 @@ type ExplainStmt struct {
 	Stmt      Prod
 }
 
-func NewExplainStmt(p Prod) *ExplainStmt {
+func NewExplainStmt(p Prod, s *Scope) *ExplainStmt {
 	var b *Base
 	if p != nil {
 		b = p.GetBase()
 	}
-	return &ExplainStmt{
-		Base: b,
+	stmt := &ExplainStmt{
+		Base: NewBase(b),
 	}
+	stmt.Scope = s
+	return stmt
 }
 
 func (s *ExplainStmt) Out() string {
@@ -578,14 +580,16 @@ type AnalyseStmt struct {
 	Name string
 }
 
-func NewAnalyseStmt(p Prod) *AnalyseStmt {
+func NewAnalyseStmt(p Prod, s *Scope) *AnalyseStmt {
 	var b *Base
 	if p != nil {
 		b = p.GetBase()
 	}
-	return &AnalyseStmt{
-		Base: b,
+	stmt := &AnalyseStmt{
+		Base: NewBase(b),
 	}
+	stmt.Scope = s
+	return stmt
 }
 
 func (s *AnalyseStmt) Out() string {
@@ -598,14 +602,16 @@ type VacuumStmt struct {
 	File string
 }
 
-func NewVacuumStmt(p Prod) *VacuumStmt {
+func NewVacuumStmt(p Prod, s *Scope) *VacuumStmt {
 	var b *Base
 	if p != nil {
 		b = p.GetBase()
 	}
-	return &VacuumStmt{
-		Base: b,
+	stmt := &VacuumStmt{
+		Base: NewBase(b),
 	}
+	stmt.Scope = s
+	return stmt
 }
 
 func (s *VacuumStmt) Out() string {
@@ -625,14 +631,16 @@ type CompoundStmt struct {
 	OrderByClause *OrderByClause
 }
 
-func NewCompoundStmt(p Prod) *CompoundStmt {
+func NewCompoundStmt(p Prod, s *Scope) *CompoundStmt {
 	var b *Base
 	if p != nil {
 		b = p.GetBase()
 	}
-	return &CompoundStmt{
-		Base: b,
+	stmt := &CompoundStmt{
+		Base: NewBase(b),
 	}
+	stmt.Scope = s
+	return stmt
 }
 
 func (s *CompoundStmt) Out() string {

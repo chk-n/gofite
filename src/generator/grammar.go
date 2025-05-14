@@ -142,6 +142,33 @@ func (g *Generator) GenerateSelectOrCTE(p ast.Prod, s *ast.Scope) ast.Prod {
 	return g.GenerateSelect(p, s)
 }
 
+func (g *Generator) GenerateRandom(p ast.Prod, s *ast.Scope) ast.Prod {
+	if d42() == 1 {
+		return g.GenerateInsert(p, s)
+	} else if d42() == 1 {
+		return g.GenerateUpdate(p, s)
+	} else if d42() == 1 {
+		return g.GenerateDelete(p, s)
+	} else if d42() == 1 {
+		return g.GenerateCTE(p, s)
+	} else if d42() == 1 {
+		return g.GenerateCompound(p, s)
+	} else if d100() == 1 {
+		return g.GenerateSavepoint(p, s)
+	} else if d100() == 1 {
+		// NOTE: as fuzzer uses interactive conn using unix pipes
+		// we need to also first DROP the view
+		// return g.GenerateView(p, s)
+	} else if d1000() == 1 {
+		return g.GenerateAnalyse(p, s)
+	} else if d1000() == 1 {
+		return g.GenerateExplain(p, s)
+	} else if d1000()+d1000() == 1 {
+		return g.GenerateVacuum(p, s)
+	}
+	return g.GenerateSelect(p, s)
+}
+
 func (g *Generator) GenerateStatement(p ast.Prod, s *ast.Scope) ast.Prod {
 	if d42() == 1 {
 		return g.GenerateInsert(p, s)
@@ -164,7 +191,7 @@ func (g *Generator) GenerateStatement(p ast.Prod, s *ast.Scope) ast.Prod {
 }
 
 func (g *Generator) GenerateExplain(p ast.Prod, s *ast.Scope) *ast.ExplainStmt {
-	expl := ast.NewExplainStmt(p)
+	expl := ast.NewExplainStmt(p, s)
 	if d6() < 3 {
 		expl.QueryPlan = true
 	}
@@ -174,7 +201,7 @@ func (g *Generator) GenerateExplain(p ast.Prod, s *ast.Scope) *ast.ExplainStmt {
 }
 
 func (g *Generator) GenerateAnalyse(p ast.Prod, s *ast.Scope) *ast.AnalyseStmt {
-	stmt := ast.NewAnalyseStmt(p)
+	stmt := ast.NewAnalyseStmt(p, s)
 	if s.Schema.Name != "" && d6() < 3 {
 		stmt.Name = s.Schema.Name
 	} else if s.Schema.Name != "" {
@@ -189,7 +216,7 @@ func (g *Generator) GenerateAnalyse(p ast.Prod, s *ast.Scope) *ast.AnalyseStmt {
 }
 
 func (g *Generator) GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
-	stmt := ast.NewVacuumStmt(p)
+	stmt := ast.NewVacuumStmt(p, s)
 
 	// Not supported in 3.26.0..
 	// if d100() == 1 {
@@ -211,7 +238,7 @@ func (g *Generator) GenerateVacuum(p ast.Prod, s *ast.Scope) *ast.VacuumStmt {
 
 // Generates UNION, INTERSECT and EXCEPT queries
 func (g *Generator) GenerateCompound(p ast.Prod, s *ast.Scope) *ast.CompoundStmt {
-	stmt := ast.NewCompoundStmt(p)
+	stmt := ast.NewCompoundStmt(p, s)
 	slct := g.GenerateSelect(p, s)
 	// LIMIT and ORDER BY clause needs to come after UNION
 	stmt.LimitClause = slct.LimitClause

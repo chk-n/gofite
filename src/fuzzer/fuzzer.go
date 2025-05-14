@@ -60,7 +60,8 @@ type Fuzzer struct {
 	// TODO: define corpus data structure
 	corpus []ast.Prod
 	// queries to be executed
-	batches chan *generator.Batch
+	batchesRandom     chan *generator.Batch
+	batchesStructured chan *generator.Batch
 	// queries that caused an error
 	crash chan *generator.Batch
 
@@ -84,10 +85,11 @@ func New(cfg *Config) *Fuzzer {
 	}
 	// TODO: set config Threads
 	f := &Fuzzer{
-		batchSize: cfg.BatchSize,
-		outDir:    cfg.OutDir,
-		batches:   make(chan *generator.Batch, 5_000), // TODO: empirically determine channel size
-		crash:     make(chan *generator.Batch, 100),   // TODO: empirically determine channel size
+		batchSize:         cfg.BatchSize,
+		outDir:            cfg.OutDir,
+		batchesRandom:     make(chan *generator.Batch, 5_000),
+		batchesStructured: make(chan *generator.Batch, 5_000),
+		crash:             make(chan *generator.Batch, 100),
 		// coverage: NewCoverage(),
 		pool: sync.Pool{
 			New: func() any {
@@ -118,18 +120,25 @@ func (f *Fuzzer) Fuzz() {
 		return
 	}
 
-	// start sql query generator
-	f.log.Debug("starting seed corpus generation")
+	f.log.Debug("starting random input generator")
 	go f.randomInput()
+
+	f.log.Debug("starting structured input generator")
+	go f.structuredInput()
 
 	f.log.Debug("starting minimisation")
 	go f.minimise()
 
-	f.log.Debug("starting f.run")
-	for range runtime.NumCPU() - 2 {
+	f.log.Debug("starting crash runer")
+	for range runtime.NumCPU()/2 - 2 {
 		go f.run()
 	}
+	f.log.Debug("starting comparison runer")
+	for range runtime.NumCPU()/2 - 2 {
+		go f.runCmp()
+	}
 
+	f.log.Debug("starting statistics reporter")
 	go f.reportStats()
 
 	// block forever
@@ -159,13 +168,28 @@ func (f *Fuzzer) reportStats() {
 
 // generate many random sql queries
 func (f *Fuzzer) randomInput() {
-	g := generator.New(&generator.Config{})
+	g := generator.New(&generator.Config{IsDeterministic: false})
 	for {
-		// stmts := g.NextBatchUID(f.batchSize)
+		stmts := g.NextBatchRandom(f.batchSize)
+		b := generator.NewBatch(stmts[0].Schema().Out(), stmts)
+		select {
+		case f.batchesRandom <- b:
+		default:
+			// channel full
+			time.Sleep(2 * time.Second)
+			f.log.Error("query channel full. ignoring batch")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (f *Fuzzer) structuredInput() {
+	g := generator.New(&generator.Config{IsDeterministic: true})
+	for {
 		stmts := g.NextBatchStructured(f.batchSize)
 		b := generator.NewBatch(stmts[0].Schema().Out(), stmts)
 		select {
-		case f.batches <- b:
+		case f.batchesStructured <- b:
 		default:
 			// channel full
 			time.Sleep(2 * time.Second)
@@ -176,11 +200,37 @@ func (f *Fuzzer) randomInput() {
 }
 
 // runs on one thread executing batches sequentially
+// using non-deterministic compeltely random queries
 func (f *Fuzzer) run() {
 	// execute using diff_test_engine
 	dte := diff_test_engine.New(f.log)
 	for {
-		b, _ := <-f.batches
+		b := <-f.batchesRandom
+		f.queriesCnt.Add(int64(f.batchSize))
+
+		ok := dte.RunBatch(b, true)
+		if !ok {
+			f.log.Info("bug detected! verifying...")
+			select {
+			case f.crash <- b:
+			default:
+				dte.Close()
+				// out.Reset()
+				// f.pool.Put(out)
+				f.log.Error("crash channel full. ignoring batch")
+				continue
+			}
+		}
+
+	}
+}
+
+// runs on one thread executing batches sequentially
+func (f *Fuzzer) runCmp() {
+	// execute using diff_test_engine
+	dte := diff_test_engine.New(f.log)
+	for {
+		b, _ := <-f.batchesStructured
 
 		f.queriesCnt.Add(int64(f.batchSize))
 

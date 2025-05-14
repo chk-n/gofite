@@ -50,7 +50,7 @@ func (g *Generator) NextBatchRandom(n uint) []ast.Prod {
 			Schema:  sch,
 			StmtSeq: make(map[string]uint),
 		}
-		batch[i] = g.GenerateStatement(nil, s)
+		batch[i] = g.GenerateRandom(nil, s)
 	}
 
 	return batch
