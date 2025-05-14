@@ -173,10 +173,11 @@ func (f *Fuzzer) randomInput() {
 		select {
 		case f.batches <- b:
 		default:
-			time.Sleep(2 * time.Second)
 			// channel full
+			time.Sleep(2 * time.Second)
 			f.log.Error("query channel full. ignoring batch")
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
