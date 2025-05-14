@@ -15,7 +15,7 @@ var debug = false
 var types = []schema.SqlType{
 	// NOTE HARRY: Temporary disable those to make results a bit simpler
 	// schema.NUMERIC, ...
-	schema.INT, schema.TEXT, schema.BLOB,
+	schema.INT, schema.TEXT, // schema.BLOB,
 	schema.BOOL, schema.NULL,
 }
 
