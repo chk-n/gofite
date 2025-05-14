@@ -22,9 +22,6 @@ import (
 	sqlite_new_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_39_4_driver"
 )
 
-var old_sqlite_binary_path string = "../src/diff_test_engine/sqlite3-3.26.0-arm"
-var new_sqlite_binary_path string = "../src/diff_test_engine/sqlite3-3.39.4-modified"
-
 // The general algorithm:
 //
 // Initial phase:
@@ -92,11 +89,10 @@ func New(cfg *Config) *Fuzzer {
 	}
 	// TODO: set config Threads
 	f := &Fuzzer{
-		batchSize:     cfg.BatchSize,
-		outDir:        cfg.OutDir,
-		batches:       make(chan *generator.Batch, 5_000), // TODO: empirically determine channel size
-		crash:         make(chan *generator.Batch, 100),   // TODO: empirically determine channel size
-		verifiedCrash: make(chan *generator.Batch, 100),   // TODO: empirically determine channel size
+		batchSize: cfg.BatchSize,
+		outDir:    cfg.OutDir,
+		batches:   make(chan *generator.Batch, 5_000), // TODO: empirically determine channel size
+		crash:     make(chan *generator.Batch, 100),   // TODO: empirically determine channel size
 		// coverage: NewCoverage(),
 		pool: sync.Pool{
 			New: func() any {
@@ -118,8 +114,6 @@ func New(cfg *Config) *Fuzzer {
 }
 
 func (f *Fuzzer) Fuzz() {
-
-	go diff_test_engine.StartVerifier(old_sqlite_binary_path, new_sqlite_binary_path, f.crash, f.verifiedCrash)
 
 	f.startTime = time.Now()
 	f.ctx = context.Background()
@@ -173,7 +167,8 @@ func (f *Fuzzer) reportStats() {
 func (f *Fuzzer) randomInput() {
 	g := generator.New(&generator.Config{})
 	for {
-		stmts := g.NextBatchUID(f.batchSize)
+		// stmts := g.NextBatchUID(f.batchSize)
+		stmts := g.NextBatchStructured(f.batchSize)
 		b := generator.NewBatch(stmts[0].Schema().Out(), stmts)
 		select {
 		case f.batches <- b:
@@ -197,43 +192,19 @@ func (f *Fuzzer) run() {
 		// initialise new coverage bitmap
 		// cov := NewCoverage()
 
-		out := f.pool.Get().(*strings.Builder)
-		sql := b.String(out)
-
-		var err error
-		if err = dte.ExecAndCompareSQLErrors(sql); err == nil {
-			err = dte.CompareDBStates()
-		}
-		if err != nil {
+		ok := dte.RunBatch(b, false)
+		if !ok {
 			f.log.Info("bug detected! verifying...")
-			b.Err = err
 			select {
 			case f.crash <- b:
 			default:
 				dte.Close()
-				out.Reset()
-				f.pool.Put(out)
+				// out.Reset()
+				// f.pool.Put(out)
 				f.log.Error("crash channel full. ignoring batch")
 				continue
 			}
 		}
-
-		err = dte.ExecAndCompareSQLErrors("DROP TABLE t0;")
-		if err != nil {
-			f.log.Info("drop table issue detected: " + err.Error())
-			b.Err = err
-			select {
-			case f.crash <- b:
-			default:
-				dte.Close()
-				f.pool.Put(out)
-				f.log.Error("crash channel full. ignoring batch")
-				continue
-			}
-		}
-
-		out.Reset()
-		f.pool.Put(out)
 
 		// cov.Collect()
 
@@ -272,15 +243,14 @@ func (f *Fuzzer) mutate() {
 // caused the crash
 func (f *Fuzzer) minimise() {
 	for {
-		bs, _ := <-f.verifiedCrash
+		bs, _ := <-f.crash
 		n := bs.Len()
 
 		if n == 0 {
 			continue
 		}
 
-		// b := f.binarySearch(bs, 0, n)
-		b := bs
+		b := f.binarySearch(bs, 0, n)
 
 		out := f.pool.Get().(*strings.Builder)
 
@@ -302,37 +272,38 @@ func (f *Fuzzer) minimise() {
 // that caused the issue. NOTE: returned minimal batch might
 // contain sql statements not needed for error to be triggered
 func (f *Fuzzer) binarySearch(b *generator.Batch, l, h int) *generator.Batch {
-	if l-h <= 1 {
-		// case 1: minimal batch consisting of one query
-		return b
-	}
-
-	mid := (l + h) / 2
-
-	out := f.pool.Get().(*strings.Builder)
-	defer out.Reset()
-	defer f.pool.Put(out)
-
-	// execute ls
-	ls := b.Slice(l, mid)
-	// TODO: check if it is okay to reuse dte for executing RHS
-	// or if its better to create new dte instance
-	dte := diff_test_engine.New(f.log)
-	defer dte.Close()
-
-	if err := dte.ExecAndCompareQuery(ls.String(out)); err != nil {
-		return f.binarySearch(ls, l, mid)
-	}
-	// we need to reset as it was written to already
-	out.Reset()
-
-	// execute rs
-	rs := b.Slice(mid, h)
-	if err := dte.ExecAndCompareQuery(rs.String(out)); err != nil {
-		return f.binarySearch(rs, mid, h)
-	}
-
-	// case 2: minimal batch consisting of multiple queries
 	return b
+	// if l-h <= 1 {
+	// 	// case 1: minimal batch consisting of one query
+	// 	return b
+	// }
+
+	// mid := (l + h) / 2
+
+	// out := f.pool.Get().(*strings.Builder)
+	// defer out.Reset()
+	// defer f.pool.Put(out)
+
+	// // execute ls
+	// ls := b.Slice(l, mid)
+	// // TODO: check if it is okay to reuse dte for executing RHS
+	// // or if its better to create new dte instance
+	// dte := diff_test_engine.New(f.log)
+	// defer dte.Close()
+
+	// if err := dte.ExecAndCompareQuery(ls.String(out)); err != nil {
+	// 	return f.binarySearch(ls, l, mid)
+	// }
+	// // we need to reset as it was written to already
+	// out.Reset()
+
+	// // execute rs
+	// rs := b.Slice(mid, h)
+	// if err := dte.ExecAndCompareQuery(rs.String(out)); err != nil {
+	// 	return f.binarySearch(rs, mid, h)
+	// }
+
+	// // case 2: minimal batch consisting of multiple queries
+	// return b
 
 }
