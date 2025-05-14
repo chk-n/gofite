@@ -16,6 +16,8 @@ import (
 	"github.com/cnordg/ast-group-project/src/generator"
 )
 
+const OldSqliteBinaryPath = "/bin/sqlite3-3.26.0"
+const NewSqliteBinaryPath = "/bin/sqlite3-3.39.4"
 const uniqueDelimiter = "DIFFERENTIAL_TEST_DELIMITER_DBCOMPARE_XYZ789"
 
 type sqliteInstance struct {

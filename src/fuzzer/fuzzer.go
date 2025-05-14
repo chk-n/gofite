@@ -15,11 +15,6 @@ import (
 	"github.com/cnordg/ast-group-project/src/ast"
 	"github.com/cnordg/ast-group-project/src/diff_test_engine"
 	"github.com/cnordg/ast-group-project/src/generator"
-
-	// To be tested version
-	sqlite_old_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_26_driver"
-	// Verifying version
-	sqlite_new_driver "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_39_4_driver"
 )
 
 // The general algorithm:
@@ -102,19 +97,18 @@ func New(cfg *Config) *Fuzzer {
 		log: slog.New(slog.NewTextHandler(os.Stdout, opts)),
 	}
 
-	if cfg.Debug {
-		f.log.Debug("[*] Initializing SQLite Differential Testing Engine")
-		vOld, _, _ := sqlite_old_driver.Version()
-		f.log.Debug("[**] Old SQLite Version", slog.String("version", vOld))
-		vNew, _, _ := sqlite_new_driver.Version()
-		f.log.Debug("[**] New SQLite Version", slog.String("version", vNew))
-	}
+	// if cfg.Debug {
+	// 	f.log.Debug("[*] Initializing SQLite Differential Testing Engine")
+	// 	vOld, _, _ := sqlite_old_driver.Version()
+	// 	f.log.Debug("[**] Old SQLite Version", slog.String("version", vOld))
+	// 	vNew, _, _ := sqlite_new_driver.Version()
+	// 	f.log.Debug("[**] New SQLite Version", slog.String("version", vNew))
+	// }
 
 	return f
 }
 
 func (f *Fuzzer) Fuzz() {
-
 	f.startTime = time.Now()
 	f.ctx = context.Background()
 

@@ -38,7 +38,7 @@ func TestSelectGeneration(t *testing.T) {
 
 			q := GenerateSelect(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -71,7 +71,7 @@ func TestCTEGeneration(t *testing.T) {
 
 			q := GenerateCTE(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -102,7 +102,7 @@ func TestInsertGeneration(t *testing.T) {
 
 			q := GenerateInsert(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -134,7 +134,7 @@ func TestUpdateGeneration(t *testing.T) {
 
 			q := GenerateUpdate(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -165,7 +165,7 @@ func TestDeleteGeneration(t *testing.T) {
 
 			q := GenerateDelete(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -197,7 +197,7 @@ func TestExplainGeneration(t *testing.T) {
 
 			q := GenerateExplain(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -229,7 +229,7 @@ func TestAnalyseGeneration(t *testing.T) {
 
 			q := GenerateAnalyse(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -258,7 +258,7 @@ func TestVacuumGeneration(t *testing.T) {
 
 		q := GenerateVacuum(nil, s)
 		query := schemaSql + q.Out() + ";\n"
-		cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+		cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 		var buf bytes.Buffer
 		cmd.Stderr = &buf
 		if err := cmd.Run(); err != nil {
@@ -289,7 +289,7 @@ func TestCompoundGeneration(t *testing.T) {
 
 			q := GenerateCompound(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -321,7 +321,7 @@ func TestSavepointGeneration(t *testing.T) {
 
 			q := GenerateSavepoint(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {
@@ -353,7 +353,7 @@ func TestCreateView(t *testing.T) {
 
 			q := GenerateView(nil, s)
 			query := schemaSql + q.Out() + ";\n"
-			cmd := exec.Command("./sqlite3-3.26.0-amd64", ":memory:", query)
+			cmd := exec.Command("/bin/sqlite3-3.26.0", ":memory:", query)
 			var buf bytes.Buffer
 			cmd.Stderr = &buf
 			if err := cmd.Run(); err != nil {

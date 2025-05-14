@@ -1,0 +1,1 @@
+libtool: link: clang -o libsqlite3.so .libs/sqlite3.o   -Wl,-rpath -Wl,/home/unga/Documents/sqlite

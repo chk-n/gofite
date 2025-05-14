@@ -5,8 +5,6 @@ import (
 	"os"
 	"testing"
 
-	_ "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_26_driver"
-	_ "github.com/cnordg/ast-group-project/src/diff_test_engine/sqlite_3_39_4_driver"
 	"github.com/cnordg/ast-group-project/src/generator"
 )
 
