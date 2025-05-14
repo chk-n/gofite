@@ -17,10 +17,10 @@ all: build
 # Build the project
 build:
 	@echo "Building with SanitizerCoverage instrumentation..."
-	mkdir -p lib
-	clang -c include/instrument.c -o instrument.o
-	ar rcs lib/libinstrument.a instrument.o
-	rm instrument.o
+	# mkdir -p lib
+	# clang -c include/instrument.c -o instrument.o
+	# ar rcs lib/libinstrument.a instrument.o
+	# rm instrument.o
 	go build -o $(BINARY_NAME) cmd/main.go
 
 # Clean built binary
