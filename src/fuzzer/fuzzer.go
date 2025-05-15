@@ -17,27 +17,6 @@ import (
 	"github.com/cnordg/ast-group-project/src/generator"
 )
 
-// The general algorithm:
-//
-// Initial phase:
-// 1. Generate random SQL queries
-// 2. Execute those queries and gather
-// coverage metrics
-// 3. Build initial seed corpus with
-// queries that had highest coverage
-//
-// Mutation based fuzzing
-// 4. Get seed from corpus using a
-// weighted selection algorithm
-// 5. Mutate query using some strategy
-// 6. Execute and gather coverage
-// 7. If new coverage add to corpus
-// 8. Maybe we randomly add fresh
-// queries to corpus
-// 9. Maybe we prune redundant seeds
-// after some time.
-// 10. Maybe we minimise complex queries?
-
 type Config struct {
 	Debug   bool
 	Threads int
@@ -84,7 +63,7 @@ func New(cfg *Config, ctx context.Context) *Fuzzer {
 			Level: slog.LevelDebug, // Explicitly set the level
 		}
 	}
-	// TODO: set config Threads
+
 	f := &Fuzzer{
 		batchSize:         cfg.BatchSize,
 		outDir:            cfg.OutDir,
@@ -100,14 +79,6 @@ func New(cfg *Config, ctx context.Context) *Fuzzer {
 		mainCtx: ctx,
 		log:     slog.New(slog.NewTextHandler(os.Stdout, opts)),
 	}
-
-	// if cfg.Debug {
-	// 	f.log.Debug("[*] Initializing SQLite Differential Testing Engine")
-	// 	vOld, _, _ := sqlite_old_driver.Version()
-	// 	f.log.Debug("[**] Old SQLite Version", slog.String("version", vOld))
-	// 	vNew, _, _ := sqlite_new_driver.Version()
-	// 	f.log.Debug("[**] New SQLite Version", slog.String("version", vNew))
-	// }
 
 	return f
 }
@@ -244,9 +215,6 @@ func (f *Fuzzer) runCmp() {
 
 			f.queriesCnt.Add(int64(f.batchSize))
 
-			// initialise new coverage bitmap
-			// cov := NewCoverage()
-
 			ok := dte.RunBatch(b, false)
 			if !ok {
 				f.log.Info("bug detected! verifying...")
@@ -258,38 +226,6 @@ func (f *Fuzzer) runCmp() {
 				}
 			}
 		}
-
-		// cov.Collect()
-
-		// check if new coverage discovered and update global
-		// coverage with new coverage atomically
-		// NOTE: perhaps it is more performant to write lock
-		// directly instead of first read locking. Depends how
-		// many new statements are discovered
-		// f.mu.RLock()
-		// hasNewCoverage := cov.Compare(f.coverage)
-		// f.mu.RUnlock()
-
-		// if !hasNewCoverage {
-		// 	continue
-		// }
-
-		// f.mu.Lock()
-		// f.coverage = cov.Copy(f.coverage)
-		// f.mu.Unlock()
-
-		// f.log.Debug("new coverage found!")
-	}
-}
-
-// TODO: implement mutation startegy
-func (f *Fuzzer) mutate() {
-	for {
-		// 1. Read from corpus
-		// 2. Create a batch with the original statement
-		// 3. Mutate the batch based on coverage
-		// 4. Pass to execution queue
-		// 5. Sleep briefly to avoid overwhelming the system
 	}
 }
 
@@ -304,7 +240,8 @@ func (f *Fuzzer) minimise() {
 			continue
 		}
 
-		b := f.binarySearch(bs, 0, n)
+		b := bs
+		// b := f.binarySearch(bs, 0, n)
 
 		out := f.pool.Get().(*strings.Builder)
 
@@ -325,39 +262,37 @@ func (f *Fuzzer) minimise() {
 // reduces a batch to find the smallest set of sql statements
 // that caused the issue. NOTE: returned minimal batch might
 // contain sql statements not needed for error to be triggered
-func (f *Fuzzer) binarySearch(b *generator.Batch, l, h int) *generator.Batch {
-	return b
-	// if l-h <= 1 {
-	// 	// case 1: minimal batch consisting of one query
-	// 	return b
-	// }
+// func (f *Fuzzer) binarySearch(b *generator.Batch, l, h int) *generator.Batch {
+// if l-h <= 1 {
+// 	// case 1: minimal batch consisting of one query
+// 	return b
+// }
 
-	// mid := (l + h) / 2
+// mid := (l + h) / 2
 
-	// out := f.pool.Get().(*strings.Builder)
-	// defer out.Reset()
-	// defer f.pool.Put(out)
+// out := f.pool.Get().(*strings.Builder)
+// defer out.Reset()
+// defer f.pool.Put(out)
 
-	// // execute ls
-	// ls := b.Slice(l, mid)
-	// // TODO: check if it is okay to reuse dte for executing RHS
-	// // or if its better to create new dte instance
-	// dte := diff_test_engine.New(f.log)
-	// defer dte.Close()
+// // execute ls
+// ls := b.Slice(l, mid)
+// // TODO: check if it is okay to reuse dte for executing RHS
+// // or if its better to create new dte instance
+// dte := diff_test_engine.New(f.log)
+// defer dte.Close()
 
-	// if err := dte.ExecAndCompareQuery(ls.String(out)); err != nil {
-	// 	return f.binarySearch(ls, l, mid)
-	// }
-	// // we need to reset as it was written to already
-	// out.Reset()
+// if err := dte.ExecAndCompareQuery(ls.String(out)); err != nil {
+// 	return f.binarySearch(ls, l, mid)
+// }
+// // we need to reset as it was written to already
+// out.Reset()
 
-	// // execute rs
-	// rs := b.Slice(mid, h)
-	// if err := dte.ExecAndCompareQuery(rs.String(out)); err != nil {
-	// 	return f.binarySearch(rs, mid, h)
-	// }
+// // execute rs
+// rs := b.Slice(mid, h)
+// if err := dte.ExecAndCompareQuery(rs.String(out)); err != nil {
+// 	return f.binarySearch(rs, mid, h)
+// }
 
-	// // case 2: minimal batch consisting of multiple queries
-	// return b
-
-}
+// // case 2: minimal batch consisting of multiple queries
+// return b
+// }
