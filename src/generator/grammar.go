@@ -423,7 +423,7 @@ repeat1:
 	aliasedRel := query.SelectClause.DerivedColumns
 	stmt.Scope.Refs = append(stmt.Scope.Refs, &schema.AliasedRelation{Alias: alias, Cols: aliasedRel})
 
-	if d6() > 2 {
+	if d6() > 3 {
 		goto repeat1
 	}
 
@@ -432,7 +432,7 @@ repeat2:
 	tab := randomPick(s.Tables)
 	stmt.Scope.Tables = append(stmt.Scope.Tables, tab)
 
-	if d6() > 3 {
+	if d6() > 4 {
 		goto repeat2
 	}
 
