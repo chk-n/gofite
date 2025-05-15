@@ -54,7 +54,7 @@ func main() {
 		BatchSize: *batchSize,
 		OutDir:    *outputDir,
 	}
-	f := fuzzer.New(cfg)
+	f := fuzzer.New(cfg, ctx)
 
 	l.Info("Starting SQLite fuzzer",
 		"debug", *debugMode,
@@ -74,6 +74,9 @@ func main() {
 	select {
 	case <-ctx.Done():
 		l.Info("Interrupt received..")
+		if *debugMode {
+			time.Sleep(1 * time.Second)
+		}
 	case <-timeoutChan:
 		l.Info("Timeout reached...")
 	}

@@ -17,7 +17,8 @@ import (
 
 const OldSqliteBinaryPath = "/bin/sqlite3-3.26.0"
 const NewSqliteBinaryPath = "/bin/sqlite3-3.39.4"
-const uniqueDelimiter = "DIFFERENTIAL_TEST_DELIMITER_DBCOMPARE_XYZ789"
+
+const uniqueDelimiter = "DTE_SQLITE3_DELIMITER_G71YE31GYEW891EU1290"
 
 type sqliteInstance struct {
 	binaryPath  string
@@ -29,7 +30,7 @@ type sqliteInstance struct {
 	stderrChan  chan string
 	stderrWg    sync.WaitGroup
 	shutdownErr chan struct{}
-	instanceID  string // For logging
+	instanceID  string
 }
 
 type DiffTestEngineInstance struct {
@@ -40,14 +41,11 @@ type DiffTestEngineInstance struct {
 }
 
 func startSQLiteProcess(id string, binaryPath string, dbPath string, l *slog.Logger) (*sqliteInstance, error) {
-	l.Debug("[%s] Starting SQLite process: %s with DB: %s", id, binaryPath, dbPath)
+	l.Debug("Starting SQLite process in: " + binaryPath)
 	var cmd *exec.Cmd
 	if dbPath == "" || dbPath == ":memory:" {
 		cmd = exec.Command(binaryPath) // In-memory if dbPath is empty
 	} else {
-		// Ensure a clean state for file-based DBs if they exist from previous runs
-		// For a more robust setup, you might copy from a template or ensure deletion
-		// os.Remove(dbPath) // Optional: delete DB file before starting for a clean slate
 		cmd = exec.Command(binaryPath, dbPath)
 	}
 
@@ -87,17 +85,13 @@ func startSQLiteProcess(id string, binaryPath string, dbPath string, l *slog.Log
 		instance.cleanupPipes()
 		return nil, fmt.Errorf("[%s] failed to start sqlite3 (%s): %w", id, binaryPath, err)
 	}
-	l.Debug("[%s] SQLite process started (PID: %d)", id, cmd.Process.Pid)
 
 	instance.stderrWg.Add(1)
 	go func() {
 		defer instance.stderrWg.Done()
-		// defer close(instance.stderrChan) // Closed in Close() method after WaitGroup
-		l.Debug("[%s StderrReader] Starting", instance.instanceID)
 		for {
 			select {
 			case <-instance.shutdownErr:
-				l.Debug("[%s StderrReader] Shutdown signal received.", instance.instanceID)
 				// Drain remaining lines after shutdown signal if any, before scanner stops
 				for instance.stderr.Scan() {
 					instance.stderrChan <- instance.stderr.Text()
@@ -107,18 +101,14 @@ func startSQLiteProcess(id string, binaryPath string, dbPath string, l *slog.Log
 				if instance.stderr.Scan() {
 					instance.stderrChan <- instance.stderr.Text()
 				} else {
-					if err := instance.stderr.Err(); err != nil {
-						l.Debug("[%s StderrReader] Error: %v", instance.instanceID, err)
-					}
-					l.Debug("[%s StderrReader] Pipe closed or error, exiting.", instance.instanceID)
+					l.Debug("[StderrReader] Pipe closed or error, exiting. Instance: " + instance.instanceID)
 					return
 				}
 			}
 		}
 	}()
 
-	// Initial setup for consistent output. CRITICAL for diffing.
-	// Both instances MUST use the same setup.
+	// Initial setup for consistent output..
 	initialSetup := fmt.Sprintf(".echo off\n.bail on\n.mode list\n.separator |\nSELECT '%s';\n", uniqueDelimiter)
 	if _, err := io.WriteString(instance.stdin, initialSetup); err != nil {
 		instance.Close()
@@ -139,23 +129,21 @@ SetupLoop:
 				initOutput.WriteString(fmt.Sprintf("STDERR during setup: %s\n", errLine))
 			} else {
 				// Stderr closed unexpectedly
-				l.Debug("[%s] Stderr channel closed during setup.", id)
 				break SetupLoop
 			}
 		default:
 			if instance.stdout.Scan() {
 				line := instance.stdout.Text()
 				if line == uniqueDelimiter {
-					l.Debug("[%s] Initial setup complete.", id)
 					initialDelimiterFound = true
 					break SetupLoop
 				}
 				initOutput.WriteString(line + "\n")
 			} else {
 				if err := instance.stdout.Err(); err != nil {
-					l.Debug("[%s] Error scanning stdout during setup: %v", id, err)
+					l.Debug("Error scanning stdout during setup: ID:", id, " Error:", err)
 				} else {
-					l.Debug("[%s] Stdout closed during setup.", id)
+					l.Debug("Stdout closed during setup. ID:" + id)
 				}
 				break SetupLoop // Exit if stdout closes or errors
 			}
@@ -193,7 +181,6 @@ DrainStderrLoop:
 	}
 
 	fullCommand := fmt.Sprintf("%s\nSELECT '%s';\n", strings.TrimSpace(query), uniqueDelimiter)
-	// l.Debug("[%s] Sending command: %s", s.instanceID, strings.ReplaceAll(fullCommand, "\n", "\\n")) // Verbose
 	if _, err := io.WriteString(s.stdin, fullCommand); err != nil {
 		return nil, fmt.Errorf("[%s] failed to write query: %w", s.instanceID, err)
 	}
@@ -237,10 +224,10 @@ DrainStderrLoop:
 	}
 }
 
+// Gracefully exit the SQLite binaries
 func (s *sqliteInstance) Close() error {
 	var firstErr error
 	if s.stdin != nil {
-		// l.Debug("[%s] Sending .quit", s.instanceID) // Debug
 		if _, err := io.WriteString(s.stdin, ".quit\n"); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -258,12 +245,10 @@ func (s *sqliteInstance) Close() error {
 	}
 	s.stderrWg.Wait()
 	close(s.stderrChan) // Now safe to close after reader goroutine has exited
-
-	// l.Debug("[%s] Instance closed.", s.instanceID) // Debug
 	return firstErr
 }
 
-// --- Main Differential Testing Logic ---
+// Main Differential Testing Logic
 
 type QueryResult struct {
 	Output1     []byte
@@ -300,12 +285,9 @@ func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch, onlyCheckErrors bo
 	}()
 
 	wgExec.Wait()
-	// --- Comparison Logic ---
+	// Comparison Logic
 	res.Match = true
 	if res.Error1 != nil && res.Error2 != nil {
-		// res.ErrorMatch = true // Both errored, could compare error messages if desired
-		// For simplicity, we'll call it an "error match"
-		// More detailed: strings.Contains(res.Error1.Error(), somePattern) == strings.Contains(res.Error2.Error(), somePattern)
 		res.DiffDetails = fmt.Sprintf("Both errored. Old_Err: %v || New_Err: %v", res.Error1, res.Error2)
 		res.Match = false // Technically outputs (errors) are not identical byte-wise
 	} else if res.Error1 != nil {
@@ -327,7 +309,7 @@ func (s *DiffTestEngineInstance) RunBatch(b *generator.Batch, onlyCheckErrors bo
 	if !res.Match {
 		b.Err = errors.New(res.DiffDetails)
 	}
-
+	// Restart processes if one errors
 	if res.Error1 != nil || res.Error2 != nil {
 		s.replaceInstances()
 	}
@@ -339,44 +321,42 @@ func (s *DiffTestEngineInstance) replaceInstances() {
 	s.old.Close()
 	s.new.Close()
 
-	instance1, err := startSQLiteProcess("Old", OldSqliteBinaryPath, ":memory:", s.l)
+	oldInstance, err := startSQLiteProcess("Old", OldSqliteBinaryPath, ":memory:", s.l)
 	if err != nil {
 		s.l.Error("Failed to start SQLite instance 1 (%s): %v", OldSqliteBinaryPath, err)
 		panic("failed to spawn SQLite process (old)")
 	}
 
-	instance2, err := startSQLiteProcess("New", NewSqliteBinaryPath, ":memory:", s.l)
+	newInstance, err := startSQLiteProcess("New", NewSqliteBinaryPath, ":memory:", s.l)
 	if err != nil {
 		s.l.Error("Failed to start SQLite instance 2 (%s): %v", NewSqliteBinaryPath, err)
 		panic("failed to spawn SQLite process (new)")
 	}
 
-	s.old = instance1
-	s.new = instance2
+	s.old = oldInstance
+	s.new = newInstance
 }
 
 func New(l *slog.Logger, pool *sync.Pool) *DiffTestEngineInstance {
 
 	// Using in-memory databases for simplicity and isolation for each run.
 	l.Debug("Starting SQLite instances for differential testing...")
-	instance1, err := startSQLiteProcess("Old", OldSqliteBinaryPath, ":memory:", l)
+	oldInstance, err := startSQLiteProcess("Old", OldSqliteBinaryPath, ":memory:", l)
 	if err != nil {
 		l.Error("Failed to start SQLite instance 1 (%s): %v", OldSqliteBinaryPath, err)
 	}
-	// defer instance1.Close()
 
-	instance2, err := startSQLiteProcess("New", NewSqliteBinaryPath, ":memory:", l)
+	newInstance, err := startSQLiteProcess("New", NewSqliteBinaryPath, ":memory:", l)
 	if err != nil {
 		l.Error("Failed to start SQLite instance 2 (%s): %v", NewSqliteBinaryPath, err)
 	}
 
 	return &DiffTestEngineInstance{
-		old:  instance1,
-		new:  instance2,
+		old:  oldInstance,
+		new:  newInstance,
 		l:    l,
 		pool: pool,
 	}
-	// defer instance2.Close()
 }
 
 func (s *DiffTestEngineInstance) Close() {

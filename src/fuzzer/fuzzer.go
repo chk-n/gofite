@@ -56,7 +56,8 @@ type Fuzzer struct {
 	batchSize uint
 	// global program coverage
 	// coverage *Coverage
-	ctx context.Context
+	ctx     context.Context
+	mainCtx context.Context
 	// TODO: define corpus data structure
 	corpus []ast.Prod
 	// queries to be executed
@@ -76,7 +77,7 @@ type Fuzzer struct {
 	log *slog.Logger
 }
 
-func New(cfg *Config) *Fuzzer {
+func New(cfg *Config, ctx context.Context) *Fuzzer {
 	opts := &slog.HandlerOptions{}
 	if cfg.Debug {
 		opts = &slog.HandlerOptions{
@@ -96,7 +97,8 @@ func New(cfg *Config) *Fuzzer {
 				return &strings.Builder{}
 			},
 		},
-		log: slog.New(slog.NewTextHandler(os.Stdout, opts)),
+		mainCtx: ctx,
+		log:     slog.New(slog.NewTextHandler(os.Stdout, opts)),
 	}
 
 	// if cfg.Debug {
@@ -207,20 +209,24 @@ func (f *Fuzzer) run() {
 	dte := diff_test_engine.New(f.log, f.pool)
 	defer dte.Close()
 	for {
-		b := <-f.batchesRandom
-		f.queriesCnt.Add(int64(f.batchSize))
+		select {
+		case <-f.mainCtx.Done():
+			return
+		default:
+			b := <-f.batchesRandom
+			f.queriesCnt.Add(int64(f.batchSize))
 
-		ok := dte.RunBatch(b, true)
-		if !ok {
-			f.log.Info("bug detected! verifying...")
-			select {
-			case f.crash <- b:
-			default:
-				f.log.Error("crash channel full. ignoring batch")
-				continue
+			ok := dte.RunBatch(b, true)
+			if !ok {
+				f.log.Info("bug detected! verifying...")
+				select {
+				case f.crash <- b:
+				default:
+					f.log.Error("crash channel full. ignoring batch")
+					continue
+				}
 			}
 		}
-
 	}
 }
 
@@ -230,21 +236,26 @@ func (f *Fuzzer) runCmp() {
 	dte := diff_test_engine.New(f.log, f.pool)
 	defer dte.Close()
 	for {
-		b, _ := <-f.batchesStructured
+		select {
+		case <-f.mainCtx.Done():
+			return
+		default:
+			b, _ := <-f.batchesStructured
 
-		f.queriesCnt.Add(int64(f.batchSize))
+			f.queriesCnt.Add(int64(f.batchSize))
 
-		// initialise new coverage bitmap
-		// cov := NewCoverage()
+			// initialise new coverage bitmap
+			// cov := NewCoverage()
 
-		ok := dte.RunBatch(b, false)
-		if !ok {
-			f.log.Info("bug detected! verifying...")
-			select {
-			case f.crash <- b:
-			default:
-				f.log.Error("crash channel full. ignoring batch")
-				continue
+			ok := dte.RunBatch(b, false)
+			if !ok {
+				f.log.Info("bug detected! verifying...")
+				select {
+				case f.crash <- b:
+				default:
+					f.log.Error("crash channel full. ignoring batch")
+					continue
+				}
 			}
 		}
 
