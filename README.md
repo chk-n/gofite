@@ -20,6 +20,18 @@ crashes.
 
 ## Dependencies
 
+## Build container
+
+```
+docker build -t sqlite-fuzzer .
+```
+
+## Run container
+
+```
+docker run sqlite-fuzzer -d 30s
+```
+
 ## Build fuzzer
 
 ```

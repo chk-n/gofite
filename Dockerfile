@@ -15,13 +15,13 @@ COPY . .
 # build sqlite DUT
 RUN cd include/sqlite3-3.26.0 && \
     CFLAGS="-g -O2" CC="gcc" ./configure --build=x86_64-linux-gnu --enable-debug --enable-fts5 && \
-    make && \
+    make install && make && \
     cp sqlite3 /bin/sqlite3-3.26.0 && \
     chmod +x /bin/sqlite3-3.26.0
 # build sqlite oracle
 RUN cd include/sqlite3-3.39.4 && \
     CFLAGS="-g -O2" CC="gcc" ./configure --build=x86_64-linux-gnu --enable-debug --enable-fts5 && \
-    make && \
+    make install && make && \
     cp sqlite3 /bin/sqlite3-3.39.4 && \
     chmod +x /bin/sqlite3-3.39.4
 
