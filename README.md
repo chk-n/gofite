@@ -48,3 +48,8 @@ Note: it stores sqlite binaries in `/bin` directory of your system
 ```go
 make test
 ```
+
+## Authors
+
+- Henrik Nordgren [@chk-n](https://www.github.com/chk-n)
+- Harry Maraziaris [@cmaraziaris](https://www.github.com/cmaraziaris)
