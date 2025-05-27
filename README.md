@@ -18,8 +18,6 @@ crashes.
 * `/include`: contains sqlite source code v3.26 and v3.39.4
 * `/project`: contains project description
 
-## Dependencies
-
 ## Build container
 
 ```
