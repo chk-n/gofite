@@ -51,5 +51,5 @@ make test
 
 ## Authors
 
-- Henrik Nordgren [@chk-n](https://www.github.com/chk-n)
 - Harry Maraziaris [@cmaraziaris](https://www.github.com/cmaraziaris)
+- Henrik Nordgren [@chk-n](https://www.github.com/chk-n)
